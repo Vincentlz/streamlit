@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,11 +29,12 @@ from streamlit import config, util
 from streamlit.logger import get_logger
 from streamlit.proto.ForwardMsg_pb2 import ForwardMsg
 from streamlit.proto.PageProfile_pb2 import Argument, Command
+from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
 
 _LOGGER: Final = get_logger(__name__)
 
 # Limit the number of commands to keep the page profile message small
-# since Segment allows only a maximum of 32kb per event.
 _MAX_TRACKED_COMMANDS: Final = 200
 # Only track a maximum of 25 uses per unique command since some apps use
 # commands excessively (e.g. calling add_rows thousands of times in one rerun)
@@ -151,6 +152,7 @@ _ATTRIBUTIONS_TO_CHECK: Final = [
     "streamlit_pydantic",
     "pydantic",
     "plost",
+    "authlib",
 ]
 
 _ETC_MACHINE_ID_PATH = "/etc/machine-id"
@@ -160,7 +162,7 @@ _DBUS_MACHINE_ID_PATH = "/var/lib/dbus/machine-id"
 def _get_machine_id_v3() -> str:
     """Get the machine ID
 
-    This is a unique identifier for a user for tracking metrics in Segment,
+    This is a unique identifier for a user for tracking metrics,
     that is broken in different ways in some Linux distros and Docker images.
     - at times just a hash of '', which means many machines map to the same ID
     - at times a hash of the same string, when running in a Docker container
@@ -364,10 +366,6 @@ def gather_metrics(name: str, func: F | None = None) -> Callable[[F], F] | F:
         from timeit import default_timer as timer
 
         exec_start = timer()
-        # Local imports to prevent circular dependencies
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
-        from streamlit.runtime.scriptrunner.exceptions import RerunException
-
         ctx = get_script_run_ctx(suppress_warning=True)
 
         tracking_activated = (
@@ -444,9 +442,6 @@ def create_page_profile_message(
     uncaught_exception: str | None = None,
 ) -> ForwardMsg:
     """Create and return the full PageProfile ForwardMsg."""
-    # Local import to prevent circular dependencies
-    from streamlit.runtime.scriptrunner import get_script_run_ctx
-
     msg = ForwardMsg()
     page_profile = msg.page_profile
 

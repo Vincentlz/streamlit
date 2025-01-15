@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import json
 import os
 import sys
 import textwrap
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Final, NamedTuple, NoReturn
 from uuid import uuid4
 
@@ -82,7 +82,7 @@ def _send_email(email: str) -> None:
         "referer": "localhost:8501/",
     }
 
-    dt = datetime.utcnow().isoformat() + "+00:00"
+    dt = f"{datetime.now(timezone.utc).isoformat()}+00:00"
 
     data = {
         "anonymous_id": None,
@@ -199,8 +199,8 @@ class Credentials:
 
         try:
             os.remove(c._conf_file)
-        except OSError as e:
-            _LOGGER.error("Error removing credentials file: %s" % e)
+        except OSError:
+            _LOGGER.exception("Error removing credentials file.")
 
     def save(self) -> None:
         """Save to toml file and send email."""
@@ -222,8 +222,8 @@ class Credentials:
 
         try:
             _send_email(self.activation.email)
-        except RequestException as e:
-            _LOGGER.error(f"Error saving email: {e}")
+        except RequestException:
+            _LOGGER.exception("Error saving email:")
 
     def activate(self, show_instructions: bool = True) -> None:
         """Activate Streamlit.

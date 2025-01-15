@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,28 @@ import {
 import { DatePickerType } from "@glideapps/glide-data-grid-cells"
 import moment from "moment"
 
+import { DataFrameCell, Quiver } from "@streamlit/lib/src/dataframes/Quiver"
 import {
-  Type as ArrowType,
-  DataFrameCell,
-  Quiver,
-} from "@streamlit/lib/src/dataframes/Quiver"
+  convertTimeToDate,
+  format as formatArrowCell,
+} from "@streamlit/lib/src/dataframes/arrowFormatUtils"
+import {
+  PandasColumnType as ArrowType,
+  isBooleanType,
+  isBytesType,
+  isCategoricalType,
+  isDatetimeType,
+  isDateType,
+  isDecimalType,
+  isEmptyType,
+  isListType,
+  isNumericType,
+  isObjectType,
+  isRangeIndexType,
+  isStringType,
+  isTimeType,
+} from "@streamlit/lib/src/dataframes/arrowTypeUtils"
+import { StyledCell } from "@streamlit/lib/src/dataframes/pandasStylerUtils"
 import {
   isNullOrUndefined,
   notNullOrUndefined,
@@ -42,9 +59,12 @@ import {
   ColumnCreator,
   DateColumn,
   DateTimeColumn,
+  DateTimeColumnParams,
   isErrorCell,
+  LinkColumnParams,
   ListColumn,
   NumberColumn,
+  NumberColumnParams,
   ObjectColumn,
   removeLineBreaks,
   SelectboxColumn,
@@ -136,59 +156,31 @@ export function applyPandasStylerCss(
  * Maps the data type from Arrow to a column type.
  */
 export function getColumnTypeFromArrow(arrowType: ArrowType): ColumnCreator {
-  let typeName = arrowType ? Quiver.getTypeName(arrowType) : null
-
-  if (!typeName) {
-    // Use object column as fallback
-    return ObjectColumn
-  }
-
-  typeName = typeName.toLowerCase().trim()
-  // Match based on arrow types
-  if (["unicode", "empty", "large_string[pyarrow]"].includes(typeName)) {
+  if (isStringType(arrowType) || isEmptyType(arrowType)) {
     return TextColumn
   }
-
-  if (["datetime", "datetimetz"].includes(typeName)) {
+  if (isDatetimeType(arrowType)) {
     return DateTimeColumn
   }
-  if (typeName === "time") {
+  if (isTimeType(arrowType)) {
     return TimeColumn
   }
-  if (typeName === "date") {
+  if (isDateType(arrowType)) {
     return DateColumn
   }
-  if (["object", "bytes"].includes(typeName)) {
+  if (isObjectType(arrowType) || isBytesType(arrowType)) {
     return ObjectColumn
   }
-  if (["bool"].includes(typeName)) {
+  if (isBooleanType(arrowType)) {
     return CheckboxColumn
   }
-  if (
-    [
-      "int8",
-      "int16",
-      "int32",
-      "int64",
-      "uint8",
-      "uint16",
-      "uint32",
-      "uint64",
-      "float16",
-      "float32",
-      "float64",
-      "float96",
-      "float128",
-      "range", // The default index in pandas uses a range type.
-      "decimal",
-    ].includes(typeName)
-  ) {
+  if (isNumericType(arrowType)) {
     return NumberColumn
   }
-  if (typeName === "categorical") {
+  if (isCategoricalType(arrowType)) {
     return SelectboxColumn
   }
-  if (typeName.startsWith("list")) {
+  if (isListType(arrowType)) {
     return ListColumn
   }
 
@@ -207,22 +199,23 @@ export function getIndexFromArrow(
   data: Quiver,
   indexPosition: number
 ): BaseColumnProps {
-  const arrowType = data.types.index[indexPosition]
+  const arrowType = data.columnTypes.index[indexPosition]
   const title = data.indexNames[indexPosition]
   let isEditable = true
 
-  if (Quiver.getTypeName(arrowType) === "range") {
+  if (isRangeIndexType(arrowType)) {
     // Range indices are not editable
     isEditable = false
   }
 
   return {
-    id: `index-${indexPosition}`,
+    id: `_index-${indexPosition}`,
     name: title,
     title,
     isEditable,
     arrowType,
     isIndex: true,
+    isPinned: true,
     isHidden: false,
   } as BaseColumnProps
 }
@@ -240,8 +233,33 @@ export function getColumnFromArrow(
   data: Quiver,
   columnPosition: number
 ): BaseColumnProps {
-  const title = data.columns[0][columnPosition]
-  let arrowType = data.types.data[columnPosition]
+  // columnNames a matrix of column names.
+  // Multi-level headers will have more than one row of column names.
+  const columnHeaderNames = data.columnNames.map(
+    column => column[columnPosition]
+  )
+  const title =
+    columnHeaderNames.length > 0
+      ? columnHeaderNames[columnHeaderNames.length - 1]
+      : ""
+
+  // If there are > 1 header columns, join all these headers with a "/"
+  // and use it as the group name, but ignore empty strings headers.
+  // This does not include the last column, which we use as the actual
+  // column name. E.g.
+  // columnHeaders = ["a", "b", "c"] -> group = "a / b" name: "c"
+  // columnHeaders = ["", "b", "c"] -> group = "b" name: "c"
+  // columnHeaders = ["a", "", ""] -> group = "a" name: ""
+
+  const group =
+    columnHeaderNames.length > 1
+      ? columnHeaderNames
+          .slice(0, -1)
+          .filter(column => column !== "")
+          .join(" / ")
+      : undefined
+
+  let arrowType = data.columnTypes.data[columnPosition]
 
   if (isNullOrUndefined(arrowType)) {
     // Use empty column type as fallback
@@ -253,7 +271,7 @@ export function getColumnFromArrow(
   }
 
   let columnTypeOptions
-  if (Quiver.getTypeName(arrowType) === "categorical") {
+  if (isCategoricalType(arrowType)) {
     // Get the available categories and use it in column type metadata
     const options = data.getCategoricalOptions(columnPosition)
     if (notNullOrUndefined(options)) {
@@ -264,14 +282,16 @@ export function getColumnFromArrow(
   }
 
   return {
-    id: `column-${title}-${columnPosition}`,
+    id: `_column-${title}-${columnPosition}`,
     name: title,
     title,
     isEditable: true,
     arrowType,
     columnTypeOptions,
     isIndex: false,
+    isPinned: false,
     isHidden: false,
+    group,
   } as BaseColumnProps
 }
 
@@ -282,11 +302,12 @@ export function getColumnFromArrow(
  */
 export function getEmptyIndexColumn(): BaseColumnProps {
   return {
-    id: `empty-index`,
+    id: `_empty-index`,
     title: "",
     indexNumber: 0,
     isEditable: false,
     isIndex: true,
+    isPinned: true,
   } as BaseColumnProps
 }
 
@@ -300,8 +321,8 @@ export function getAllColumnsFromArrow(data: Quiver): BaseColumnProps[] {
   const columns: BaseColumnProps[] = []
 
   const { dimensions } = data
-  const numIndices = dimensions.headerColumns
-  const numColumns = dimensions.dataColumns
+  const numIndices = dimensions.numIndexColumns
+  const numColumns = dimensions.numDataColumns
 
   if (numIndices === 0 && numColumns === 0) {
     // Tables that don't have any columns cause an exception in glide-data-grid.
@@ -344,20 +365,20 @@ export function getAllColumnsFromArrow(data: Quiver): BaseColumnProps[] {
 export function getCellFromArrow(
   column: BaseColumn,
   arrowCell: DataFrameCell,
+  styledCell: StyledCell | undefined,
   cssStyles: string | undefined = undefined
 ): GridCell {
-  const typeName = column.arrowType
-    ? Quiver.getTypeName(column.arrowType)
-    : null
-
   let cellTemplate
   if (column.kind === "object") {
     // Always use display value from Quiver for object types
     // these are special types that the dataframe only support in read-only mode.
+
+    // TODO(lukasmasuch): Move this to object column once the
+    // field information is available in the arrowType.
     cellTemplate = column.getCell(
       notNullOrUndefined(arrowCell.content)
         ? removeLineBreaks(
-            Quiver.format(
+            formatArrowCell(
               arrowCell.content,
               arrowCell.contentType,
               arrowCell.field
@@ -375,34 +396,32 @@ export function getCellFromArrow(
     // to a date object based on the arrow field metadata.
     // Our implementation only supports unix timestamps in seconds, so we need to
     // do some custom conversion here.
+
+    // TODO(lukasmasuch): Move this to time/date/datetime column once the
+    // field information is available in the arrowType.
     let parsedDate
     if (
-      typeName === "time" &&
+      isTimeType(column.arrowType) &&
       notNullOrUndefined(arrowCell.field?.type?.unit)
     ) {
       // Time values needs to be adjusted to seconds based on the unit
-      parsedDate = moment
-        .unix(
-          Quiver.convertToSeconds(
-            arrowCell.content,
-            arrowCell.field?.type?.unit ?? 0
-          )
-        )
-        .utc()
-        .toDate()
+      parsedDate = convertTimeToDate(arrowCell.content, arrowCell.field)
     } else {
       // All other datetime related values are assumed to be in milliseconds
       parsedDate = moment.utc(Number(arrowCell.content)).toDate()
     }
 
     cellTemplate = column.getCell(parsedDate)
-  } else if (typeName === "decimal") {
+  } else if (isDecimalType(column.arrowType)) {
     // This is a special case where we want to already prepare a decimal value
     // to a number string based on the arrow field metadata. This is required
     // because we don't have access to the required scale in the number column.
+
+    // TODO(lukasmasuch): Move this to number column once the
+    // field information is available in the arrowType.
     const decimalStr = isNullOrUndefined(arrowCell.content)
       ? null
-      : Quiver.format(
+      : formatArrowCell(
           arrowCell.content,
           arrowCell.contentType,
           arrowCell.field
@@ -419,8 +438,8 @@ export function getCellFromArrow(
 
   if (!column.isEditable) {
     // Only apply display content and css styles to non-editable cells.
-    if (notNullOrUndefined(arrowCell.displayContent)) {
-      const displayData = removeLineBreaks(arrowCell.displayContent)
+    if (styledCell && notNullOrUndefined(styledCell?.displayContent)) {
+      const displayData = removeLineBreaks(styledCell.displayContent)
       // If the display content is set, use that instead of the content.
       // This is only supported for text, object, date, datetime, time and number cells.
       // Non-editable datetime cells will use the text cell kind
@@ -430,19 +449,35 @@ export function getCellFromArrow(
           ...cellTemplate,
           displayData,
         } as TextCell
-      } else if (cellTemplate.kind === GridCellKind.Number) {
+      } else if (
+        cellTemplate.kind === GridCellKind.Number &&
+        // Only apply styler value if format was not explicitly set by the user.
+        isNullOrUndefined(
+          (column.columnTypeOptions as NumberColumnParams)?.format
+        )
+      ) {
         cellTemplate = {
           ...cellTemplate,
           displayData,
         } as NumberCell
-      } else if (cellTemplate.kind === GridCellKind.Uri) {
+      } else if (
+        cellTemplate.kind === GridCellKind.Uri &&
+        // Only apply styler value if display text was not explicitly set by the user.
+        isNullOrUndefined(
+          (column.columnTypeOptions as LinkColumnParams)?.display_text
+        )
+      ) {
         cellTemplate = {
           ...cellTemplate,
           displayData,
         } as UriCell
       } else if (
         cellTemplate.kind === GridCellKind.Custom &&
-        (cellTemplate as DatePickerType).data?.kind === "date-picker-cell"
+        (cellTemplate as DatePickerType).data?.kind === "date-picker-cell" &&
+        // Only apply styler value if format was not explicitly set by the user.
+        isNullOrUndefined(
+          (column.columnTypeOptions as DateTimeColumnParams)?.format
+        )
       ) {
         cellTemplate = {
           ...cellTemplate,
@@ -454,10 +489,10 @@ export function getCellFromArrow(
       }
     }
 
-    if (cssStyles && arrowCell.cssId) {
+    if (cssStyles && styledCell?.cssId) {
       cellTemplate = applyPandasStylerCss(
         cellTemplate,
-        arrowCell.cssId,
+        styledCell.cssId,
         cssStyles
       )
     }

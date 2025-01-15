@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,12 @@ class TextMixin:
         *,  # keyword-only arguments:
         help: str | None = None,
     ) -> DeltaGenerator:
-        """Write fixed-width and preformatted text.
+        """Write text without Markdown or HTML parsing.
+
+        For monospace text, use |st.code|_.
+
+        .. |st.code| replace:: ``st.code``
+        .. _st.code: https://docs.streamlit.io/develop/api-reference/text/st.code
 
         Parameters
         ----------
@@ -47,7 +52,11 @@ class TextMixin:
         -------
         >>> import streamlit as st
         >>>
-        >>> st.text("This is some text.")
+        >>> st.text("This is text\\n[and more text](that's not a Markdown link).")
+
+        .. output ::
+            https://doc-text.streamlit.app/
+            height: 220px
 
         """
         text_proto = TextProto()

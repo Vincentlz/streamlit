@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,3 +41,28 @@ st.json(["a", "b"])
 
 st.subheader("Empty dict:")
 st.json({})
+
+st.subheader("Expand to depth of 2:")
+st.json(
+    {
+        "level1": {
+            "level2": {"level3": {"a": "b"}},
+            "c": "d",
+            "list": [{"list_item": "value"}],
+        },
+        "string": "Hello World",
+    },
+    expanded=2,
+)
+
+st.subheader("Keeps container bounds:")
+
+col1, col2 = st.container(key="container_with_json").columns(2)
+
+with col1.container(border=True):
+    st.json(
+        {
+            "foo": "a" * 100,
+            "bar": "this is a very long string that will not fit in the column and will cause it to wrap",
+        }
+    )

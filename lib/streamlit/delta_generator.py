@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import sys
-from contextvars import ContextVar
 from copy import deepcopy
 from typing import (
     TYPE_CHECKING,
@@ -42,6 +41,10 @@ from streamlit import (
     runtime,
     util,
 )
+from streamlit.delta_generator_singletons import (
+    context_dg_stack,
+    get_last_dg_added_to_context_stack,
+)
 from streamlit.elements.alert import AlertMixin
 from streamlit.elements.arrow import ArrowMixin
 from streamlit.elements.balloons import BalloonsMixin
@@ -51,7 +54,7 @@ from streamlit.elements.deck_gl_json_chart import PydeckMixin
 from streamlit.elements.doc_string import HelpMixin
 from streamlit.elements.empty import EmptyMixin
 from streamlit.elements.exception import ExceptionMixin
-from streamlit.elements.form import FormData, FormMixin, current_form_id
+from streamlit.elements.form import FormMixin
 from streamlit.elements.graphviz_chart import GraphvizMixin
 from streamlit.elements.heading import HeadingMixin
 from streamlit.elements.html import HtmlMixin
@@ -59,6 +62,7 @@ from streamlit.elements.iframe import IframeMixin
 from streamlit.elements.image import ImageMixin
 from streamlit.elements.json import JsonMixin
 from streamlit.elements.layouts import LayoutsMixin
+from streamlit.elements.lib.form_utils import FormData, current_form_id
 from streamlit.elements.map import MapMixin
 from streamlit.elements.markdown import MarkdownMixin
 from streamlit.elements.media import MediaMixin
@@ -70,6 +74,7 @@ from streamlit.elements.snow import SnowMixin
 from streamlit.elements.text import TextMixin
 from streamlit.elements.toast import ToastMixin
 from streamlit.elements.vega_charts import VegaChartsMixin
+from streamlit.elements.widgets.audio_input import AudioInputMixin
 from streamlit.elements.widgets.button import ButtonMixin
 from streamlit.elements.widgets.button_group import ButtonGroupMixin
 from streamlit.elements.widgets.camera_input import CameraInputMixin
@@ -100,7 +105,6 @@ if TYPE_CHECKING:
     from streamlit.cursor import Cursor
     from streamlit.elements.lib.built_in_chart_utils import AddRowsMetadata
 
-
 MAX_DELTA_BYTES: Final[int] = 14 * 1024 * 1024  # 14MB
 
 Value = TypeVar("Value")
@@ -126,7 +130,9 @@ def _maybe_print_use_warning() -> None:
 
         if env_util.is_repl():
             logger.get_logger("root").warning(
-                f"\n  {warning} to view a Streamlit app on a browser, use Streamlit in a file and\n  run it with the following command:\n\n    streamlit run [FILE_NAME] [ARGUMENTS]"
+                f"\n  {warning} to view a Streamlit app on a browser, use Streamlit in "
+                "a file and\n  run it with the following command:\n\n    streamlit run "
+                "[FILE_NAME] [ARGUMENTS]"
             )
 
         elif not runtime.exists() and config.get_option(
@@ -135,12 +141,15 @@ def _maybe_print_use_warning() -> None:
             script_name = sys.argv[0]
 
             logger.get_logger("root").warning(
-                f"\n  {warning} to view this Streamlit app on a browser, run it with the following\n  command:\n\n    streamlit run {script_name} [ARGUMENTS]"
+                f"\n  {warning} to view this Streamlit app on a browser, run it with "
+                f"the following\n  command:\n\n    streamlit run {script_name} "
+                "[ARGUMENTS]"
             )
 
 
 class DeltaGenerator(
     AlertMixin,
+    AudioInputMixin,
     BalloonsMixin,
     BokehMixin,
     ButtonMixin,
@@ -275,7 +284,7 @@ class DeltaGenerator(
 
     def __enter__(self) -> None:
         # with block started
-        dg_stack.set(dg_stack.get() + (self,))
+        context_dg_stack.set(context_dg_stack.get() + (self,))
 
     def __exit__(
         self,
@@ -285,7 +294,7 @@ class DeltaGenerator(
     ) -> Literal[False]:
         # with block ended
 
-        dg_stack.set(dg_stack.get()[:-1])
+        context_dg_stack.set(context_dg_stack.get()[:-1])
 
         # Re-raise any exceptions
         return False
@@ -414,6 +423,7 @@ class DeltaGenerator(
         delta_type: str,
         element_proto: Message,
         add_rows_metadata: AddRowsMetadata | None = None,
+        user_key: str | None = None,
     ) -> DeltaGenerator:
         """Create NewElement delta, fill it, and enqueue it.
 
@@ -423,6 +433,10 @@ class DeltaGenerator(
             The name of the streamlit method being called
         element_proto : proto
             The actual proto in the NewElement type e.g. Alert/Button/Slider
+        add_rows_metadata : AddRowsMetadata or None
+            Metadata for the add_rows method
+        user_key : str or None
+            A custom key for the element provided by the user.
 
         Returns
         -------
@@ -548,38 +562,6 @@ class DeltaGenerator(
         )
 
         return block_dg
-
-
-main_dg = DeltaGenerator(root_container=RootContainer.MAIN)
-sidebar_dg = DeltaGenerator(root_container=RootContainer.SIDEBAR, parent=main_dg)
-event_dg = DeltaGenerator(root_container=RootContainer.EVENT, parent=main_dg)
-bottom_dg = DeltaGenerator(root_container=RootContainer.BOTTOM, parent=main_dg)
-
-
-# The dg_stack tracks the currently active DeltaGenerator, and is pushed to when
-# a DeltaGenerator is entered via a `with` block. This is implemented as a ContextVar
-# so that different threads or async tasks can have their own stacks.
-def get_default_dg_stack() -> tuple[DeltaGenerator, ...]:
-    return (main_dg,)
-
-
-dg_stack: ContextVar[tuple[DeltaGenerator, ...]] = ContextVar(
-    "dg_stack", default=get_default_dg_stack()
-)
-
-
-def get_last_dg_added_to_context_stack() -> DeltaGenerator | None:
-    """Get the last added DeltaGenerator of the stack in the current context.
-
-    Returns None if the stack has only one element or is empty for whatever reason.
-    """
-    current_stack = dg_stack.get()
-    # If set to "> 0" and thus return the only delta generator in the stack - which logically makes more sense -, some unit tests
-    # fail. It looks like the reason is that they create their own main delta generator but do not populate the dg_stack correctly. However, to be on the safe-side,
-    # we keep the logic but leave the comment as shared knowledge for whoever will look into this in the future.
-    if len(current_stack) > 1:
-        return current_stack[-1]
-    return None
 
 
 def _writes_directly_to_sidebar(dg: DeltaGenerator) -> bool:

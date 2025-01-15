@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 import React, { FC, memo } from "react"
 
 import range from "lodash/range"
-import classNames from "classnames"
 
 import { StyledParticles } from "./styled-components"
 
@@ -42,10 +41,7 @@ const Particles: FC<React.PropsWithChildren<Props>> = ({
 }: Props) => (
   // Keys should be unique each time, so React replaces the images in the DOM and their animations
   // actually rerun.
-  <StyledParticles
-    className={classNames(className, "stHidden")}
-    data-testid={`${className}`}
-  >
+  <StyledParticles className={className} data-testid={className}>
     {range(numParticles).map(i => {
       const randNum = Math.floor(Math.random() * numParticleTypes)
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -359,11 +359,7 @@ class CameraInput extends React.PureComponent<Props, State> {
     )
 
     return (
-      <StyledCameraInput
-        width={width}
-        className="row-widget"
-        data-testid="stCameraInput"
-      >
+      <StyledCameraInput className="stCameraInput" data-testid="stCameraInput">
         <WidgetLabel
           label={element.label}
           disabled={disabled}

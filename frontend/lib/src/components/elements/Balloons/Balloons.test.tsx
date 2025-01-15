@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import React from "react"
 import { screen } from "@testing-library/react"
 
 import { render } from "@streamlit/lib/src/test_util"
-import "@testing-library/jest-dom"
 
 import Balloons, { NUM_BALLOONS, Props } from "./Balloons"
 
@@ -28,19 +27,20 @@ const getProps = (): Props => ({
 })
 
 describe("Balloons element", () => {
-  jest.useFakeTimers()
+  vi.useFakeTimers()
 
   beforeEach(() => {
-    jest.clearAllMocks()
-    jest.clearAllTimers()
+    vi.clearAllMocks()
+    vi.clearAllTimers()
   })
 
   it("renders without crashing", () => {
     const props = getProps()
     render(<Balloons {...props} />)
 
-    const balloonElement = screen.getByTestId("balloons")
+    const balloonElement = screen.getByTestId("stBalloons")
     expect(balloonElement).toBeInTheDocument()
+    expect(balloonElement).toHaveClass("stBalloons")
 
     const balloonImages = screen.getAllByRole("img")
     expect(balloonImages.length).toBe(NUM_BALLOONS)
@@ -50,11 +50,11 @@ describe("Balloons element", () => {
     })
   })
 
-  it("renders as hidden element", () => {
+  it("uses correct top-level class", () => {
     const props = getProps()
     render(<Balloons {...props} />)
 
-    const balloonElement = screen.getByTestId("balloons")
-    expect(balloonElement).toHaveClass("stHidden")
+    const balloonElement = screen.getByTestId("stBalloons")
+    expect(balloonElement).toHaveClass("stBalloons")
   })
 })

@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import os
 import sys
 import tempfile
@@ -25,6 +26,7 @@ import tornado.testing
 import tornado.web
 import tornado.websocket
 
+from streamlit.web.server import Server
 from streamlit.web.server.app_static_file_handler import (
     MAX_APP_STATIC_FILE_SIZE,
     AppStaticFileHandler,
@@ -42,8 +44,14 @@ class AppStaticFileHandlerTest(tornado.testing.AsyncHTTPTestCase):
         self._tmp_js_file = tempfile.NamedTemporaryFile(
             dir=self._tmpdir.name, suffix="script.js", delete=False
         )
+        self._tmp_webp_file = tempfile.NamedTemporaryFile(
+            dir=self._tmpdir.name, suffix="file.webp", delete=False
+        )
         self._tmp_png_image_file = tempfile.NamedTemporaryFile(
             dir=self._tmpdir.name, suffix="image.png", delete=False
+        )
+        self._tmp_pdf_document_file = tempfile.NamedTemporaryFile(
+            dir=self._tmpdir.name, suffix="document.pdf", delete=False
         )
         self._tmp_webp_image_file = tempfile.NamedTemporaryFile(
             dir=self._tmpdir.name, suffix="image.webp", delete=False
@@ -65,7 +73,9 @@ class AppStaticFileHandlerTest(tornado.testing.AsyncHTTPTestCase):
 
         self._filename = os.path.basename(self._tmpfile.name)
         self._js_filename = os.path.basename(self._tmp_js_file.name)
+        self._webp_filename = os.path.basename(self._tmp_webp_file.name)
         self._png_image_filename = os.path.basename(self._tmp_png_image_file.name)
+        self._pdf_document_filename = os.path.basename(self._tmp_pdf_document_file.name)
         self._webp_image_filename = os.path.basename(self._tmp_webp_image_file.name)
 
         super().setUp()
@@ -126,6 +136,17 @@ class AppStaticFileHandlerTest(tornado.testing.AsyncHTTPTestCase):
         assert response.headers["Content-Type"] == "image/webp"
         assert response.headers["X-Content-Type-Options"] == "nosniff"
 
+    def test_static_pdf_document_200(self):
+        """Files with extensions listed in app_static_file_handler.py
+        `SAFE_APP_STATIC_FILE_EXTENSIONS` (e.g. pdf) should have the
+        `Content-Type` header based on their extension.
+        """
+        response = self.fetch(f"/app/static/{self._pdf_document_filename}")
+
+        assert response.code == 200
+        assert response.headers["Content-Type"] == "application/pdf"
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+
     @patch("os.path.getsize", MagicMock(return_value=MAX_APP_STATIC_FILE_SIZE + 1))
     def test_big_file_404(self):
         """Files with size greater than MAX_APP_STATIC_FILE_SIZE should return 404."""
@@ -180,3 +201,15 @@ class AppStaticFileHandlerTest(tornado.testing.AsyncHTTPTestCase):
                 r.body == b"<html><title>403: Forbidden</title>"
                 b"<body>403: Forbidden</body></html>"
             )
+
+    def test_mimetype_is_overridden_by_server(self):
+        """Test content type of webps are set correctly"""
+        mimetypes.add_type("custom/webp", ".webp")
+
+        r = self.fetch(f"/app/static/{self._webp_filename}")
+        assert r.headers["Content-Type"] == "custom/webp"
+
+        Server.initialize_mimetypes()
+
+        r = self.fetch(f"/app/static/{self._webp_filename}")
+        assert r.headers["Content-Type"] == "image/webp"

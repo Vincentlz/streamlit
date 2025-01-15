@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ export default function Audio({
   width,
   endpoints,
   elementMgr,
-}: AudioProps): ReactElement {
+}: Readonly<AudioProps>): ReactElement {
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const { startTime, endTime, loop, autoplay } = element
@@ -89,7 +89,9 @@ export default function Audio({
   // Stop the audio at 'endTime' and handle loop
   useEffect(() => {
     const audioNode = audioRef.current
-    if (!audioNode) return
+    if (!audioNode) {
+      return
+    }
 
     // Flag to avoid calling 'audioNode.pause()' multiple times
     let stoppedByEndTime = false
@@ -121,7 +123,9 @@ export default function Audio({
   // Handle looping the audio
   useEffect(() => {
     const audioNode = audioRef.current
-    if (!audioNode) return
+    if (!audioNode) {
+      return
+    }
 
     // Loop the audio when it has ended
     const handleAudioEnd = (): void => {
@@ -144,13 +148,12 @@ export default function Audio({
 
   return (
     <audio
+      className="stAudio"
       data-testid="stAudio"
-      id="audio"
       ref={audioRef}
       controls
       autoPlay={autoplay && !preventAutoplay}
       src={uri}
-      className="stAudio"
       style={{ width }}
     />
   )

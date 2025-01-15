@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+import { PandasColumnType as ArrowType } from "@streamlit/lib/src/dataframes/arrowTypeUtils"
 import {
-  Type as ArrowType,
-  DataFrameCell,
-  Quiver,
-} from "@streamlit/lib/src/dataframes/Quiver"
-import { Arrow as ArrowProto } from "@streamlit/lib/src/proto"
+  getStyledCell,
+  StyledCell,
+} from "@streamlit/lib/src/dataframes/pandasStylerUtils"
+import { DataFrameCell, Quiver } from "@streamlit/lib/src/dataframes/Quiver"
 import {
   CATEGORICAL_COLUMN,
   DECIMAL,
@@ -29,7 +29,17 @@ import {
   STYLER,
   UNICODE,
 } from "@streamlit/lib/src/mocks/arrow"
+import { Arrow as ArrowProto } from "@streamlit/lib/src/proto"
 
+import {
+  applyPandasStylerCss,
+  extractCssProperty,
+  getAllColumnsFromArrow,
+  getCellFromArrow,
+  getColumnFromArrow,
+  getColumnTypeFromArrow,
+  getIndexFromArrow,
+} from "./arrowUtils"
 import {
   CheckboxColumn,
   ColumnCreator,
@@ -43,16 +53,6 @@ import {
   TextColumn,
   TimeColumn,
 } from "./columns"
-import {
-  applyPandasStylerCss,
-  extractCssProperty,
-  getAllColumnsFromArrow,
-  getCellFromArrow,
-  getColumnFromArrow,
-  getColumnTypeFromArrow,
-  getIndexFromArrow,
-} from "./arrowUtils"
-import { isIntegerType } from "./isIntegerType"
 
 const MOCK_TEXT_COLUMN = TextColumn({
   id: "1",
@@ -62,6 +62,7 @@ const MOCK_TEXT_COLUMN = TextColumn({
   isEditable: false,
   isHidden: false,
   isIndex: false,
+  isPinned: false,
   isStretched: false,
   arrowType: {
     pandas_type: "unicode",
@@ -78,6 +79,7 @@ const MOCK_NUMBER_COLUMN = NumberColumn({
   isHidden: false,
   isIndex: false,
   isStretched: false,
+  isPinned: false,
   arrowType: {
     pandas_type: "int64",
     numpy_type: "int64",
@@ -246,7 +248,7 @@ describe("getIndexFromArrow", () => {
 
     const indexColumn = getIndexFromArrow(data, 0)
     expect(indexColumn).toEqual({
-      id: `index-0`,
+      id: `_index-0`,
       isEditable: true,
       name: "",
       title: "",
@@ -256,6 +258,7 @@ describe("getIndexFromArrow", () => {
         pandas_type: "unicode",
       },
       isIndex: true,
+      isPinned: true,
       isHidden: false,
     })
   })
@@ -268,7 +271,7 @@ describe("getIndexFromArrow", () => {
 
     const indexColumn1 = getIndexFromArrow(data, 0)
     expect(indexColumn1).toEqual({
-      id: `index-0`,
+      id: `_index-0`,
       isEditable: true,
       name: "number",
       title: "number",
@@ -278,12 +281,13 @@ describe("getIndexFromArrow", () => {
         pandas_type: "int64",
       },
       isIndex: true,
+      isPinned: true,
       isHidden: false,
     })
 
     const indexColumn2 = getIndexFromArrow(data, 1)
     expect(indexColumn2).toEqual({
-      id: `index-1`,
+      id: `_index-1`,
       isEditable: true,
       name: "color",
       title: "color",
@@ -293,6 +297,7 @@ describe("getIndexFromArrow", () => {
         pandas_type: "unicode",
       },
       isIndex: true,
+      isPinned: true,
       isHidden: false,
     })
   })
@@ -307,7 +312,7 @@ describe("getColumnFromArrow", () => {
 
     const column = getColumnFromArrow(data, 0)
     expect(column).toEqual({
-      id: "column-c1-0",
+      id: "_column-c1-0",
       name: "c1",
       title: "c1",
       isEditable: true,
@@ -317,7 +322,32 @@ describe("getColumnFromArrow", () => {
         pandas_type: "unicode",
       },
       isIndex: false,
+      isPinned: false,
       isHidden: false,
+    })
+  })
+
+  it("works with multi-index headers", () => {
+    const element = ArrowProto.create({
+      data: MULTI,
+    })
+    const data = new Quiver(element)
+
+    const column = getColumnFromArrow(data, 0)
+    expect(column).toEqual({
+      id: "_column-red-0",
+      name: "red",
+      title: "red",
+      isEditable: true,
+      arrowType: {
+        meta: null,
+        numpy_type: "object",
+        pandas_type: "unicode",
+      },
+      isIndex: false,
+      isPinned: false,
+      isHidden: false,
+      group: "1",
     })
   })
 
@@ -329,7 +359,7 @@ describe("getColumnFromArrow", () => {
 
     const column = getColumnFromArrow(data, 0)
     expect(column).toEqual({
-      id: "column-c1-0",
+      id: "_column-c1-0",
       name: "c1",
       title: "c1",
       isEditable: true,
@@ -342,6 +372,7 @@ describe("getColumnFromArrow", () => {
         pandas_type: "categorical",
       },
       isIndex: false,
+      isPinned: false,
       isHidden: false,
       columnTypeOptions: {
         options: ["bar", "foo"],
@@ -364,11 +395,12 @@ describe("getAllColumnsFromArrow", () => {
           numpy_type: "object",
           pandas_type: "unicode",
         },
-        id: "index-0",
+        id: "_index-0",
         indexNumber: 0,
         isEditable: true,
         isHidden: false,
         isIndex: true,
+        isPinned: true,
         name: "",
         title: "",
       },
@@ -379,11 +411,12 @@ describe("getAllColumnsFromArrow", () => {
           pandas_type: "unicode",
         },
         columnTypeOptions: undefined,
-        id: "column-c1-0",
+        id: "_column-c1-0",
         indexNumber: 1,
         isEditable: true,
         isHidden: false,
         isIndex: false,
+        isPinned: false,
         name: "c1",
         title: "c1",
       },
@@ -394,11 +427,12 @@ describe("getAllColumnsFromArrow", () => {
           pandas_type: "unicode",
         },
         columnTypeOptions: undefined,
-        id: "column-c2-1",
+        id: "_column-c2-1",
         indexNumber: 2,
         isEditable: true,
         isHidden: false,
         isIndex: false,
+        isPinned: false,
         name: "c2",
         title: "c2",
       },
@@ -420,11 +454,12 @@ describe("getAllColumnsFromArrow", () => {
           numpy_type: "object",
           pandas_type: "empty",
         },
-        id: "index-0",
+        id: "_index-0",
         indexNumber: 0,
         isEditable: true,
         isHidden: false,
         isIndex: true,
+        isPinned: true,
         name: "",
         title: "",
       },
@@ -438,7 +473,12 @@ describe("getCellFromArrow", () => {
       data: UNICODE,
     })
     const data = new Quiver(element)
-    const cell = getCellFromArrow(MOCK_TEXT_COLUMN, data.getCell(1, 1))
+    const cell = getCellFromArrow(
+      MOCK_TEXT_COLUMN,
+      data.getCell(0, 1),
+      undefined,
+      undefined
+    )
 
     expect(cell).toEqual({
       allowOverlay: true,
@@ -461,6 +501,7 @@ describe("getCellFromArrow", () => {
       isEditable: false,
       isHidden: false,
       isIndex: false,
+      isPinned: false,
       isStretched: false,
       arrowType: {
         pandas_type: "decimal",
@@ -473,7 +514,12 @@ describe("getCellFromArrow", () => {
       data: DECIMAL, // should be interpreted as object
     })
     const data = new Quiver(element)
-    const cell = getCellFromArrow(decimalColumn, data.getCell(1, 1))
+    const cell = getCellFromArrow(
+      decimalColumn,
+      data.getCell(0, 1),
+      undefined,
+      undefined
+    )
 
     expect(cell).toEqual({
       allowNegative: true,
@@ -501,6 +547,7 @@ describe("getCellFromArrow", () => {
         isEditable: false,
         isHidden: false,
         isIndex: false,
+        isPinned: false,
         isStretched: false,
         arrowType: {
           pandas_type: "time",
@@ -520,15 +567,72 @@ describe("getCellFromArrow", () => {
           unit: 2, // Microseconds
         },
       },
-      displayContent: "FOOO",
-      cssId: null,
-      cssClass: null,
       type: "columns",
     } as object as DataFrameCell
 
+    const styledCell = {
+      displayContent: "FOOO",
+      cssId: "FAKE_ID",
+      cssClass: "FAKE_CLASS",
+    } as StyledCell
+
     // Call the getCellFromArrow function
-    const cell = getCellFromArrow(MOCK_TIME_COLUMN, arrowCell)
+    const cell = getCellFromArrow(
+      MOCK_TIME_COLUMN,
+      arrowCell,
+      styledCell,
+      undefined
+    )
     expect((cell as any).data.displayDate).toEqual("FOOO")
+  })
+
+  it("doesnt apply display content from styler if format is set", () => {
+    const MOCK_TIME_COLUMN = {
+      ...TimeColumn({
+        id: "1",
+        name: "time_column",
+        title: "Time column",
+        indexNumber: 0,
+        isEditable: false,
+        isHidden: false,
+        isIndex: false,
+        isPinned: false,
+        isStretched: false,
+        columnTypeOptions: {
+          format: "YYYY",
+        },
+        arrowType: {
+          pandas_type: "time",
+          numpy_type: "object",
+        },
+      }),
+    }
+
+    // Create a mock arrowCell object with time data
+    const arrowCell = {
+      // Unix timestamp in microseconds Wed Sep 29 2021 21:13:20
+      // Our default unit is seconds, so it needs to be adjusted internally
+      content: BigInt(1632950000123000),
+      contentType: null,
+      field: {
+        type: {
+          unit: 2, // Microseconds
+        },
+      },
+      type: "columns",
+    } as object as DataFrameCell
+
+    const styledCell = {
+      displayContent: "FOOO",
+      cssId: "FAKE_ID",
+      cssClass: "FAKE_CLASS",
+    } as StyledCell
+
+    // Call the getCellFromArrow function
+    const cell = getCellFromArrow(MOCK_TIME_COLUMN, arrowCell, styledCell)
+    // Should use the formatted value from the cell and not the displayContent
+    // from pandas styler
+    expect((cell as any).data.displayDate).toEqual("2021")
   })
 
   it("parses numeric timestamps for time columns into valid Date values", () => {
@@ -541,13 +645,14 @@ describe("getCellFromArrow", () => {
         isEditable: false,
         isHidden: false,
         isIndex: false,
+        isPinned: false,
         isStretched: false,
         arrowType: {
           pandas_type: "time",
           numpy_type: "object",
         },
       }),
-      getCell: jest.fn().mockReturnValue(getTextCell(false, false)),
+      getCell: vi.fn().mockReturnValue(getTextCell(false, false)),
     }
 
     // Create a mock arrowCell object with time data
@@ -561,14 +666,11 @@ describe("getCellFromArrow", () => {
           unit: 2, // Microseconds
         },
       },
-      displayContent: null,
-      cssId: null,
-      cssClass: null,
       type: "columns",
     } as object as DataFrameCell
 
     // Call the getCellFromArrow function
-    getCellFromArrow(MOCK_TIME_COLUMN, arrowCell)
+    getCellFromArrow(MOCK_TIME_COLUMN, arrowCell, undefined, undefined)
 
     // Check if the timestamp is adjusted properly
     expect(MOCK_TIME_COLUMN.getCell).toHaveBeenCalledWith(
@@ -586,13 +688,14 @@ describe("getCellFromArrow", () => {
         isEditable: false,
         isHidden: false,
         isIndex: false,
+        isPinned: false,
         isStretched: false,
         arrowType: {
           pandas_type: "datetime",
           numpy_type: "datetime64[ns]",
         },
       }),
-      getCell: jest.fn().mockReturnValue(getTextCell(false, false)),
+      getCell: vi.fn().mockReturnValue(getTextCell(false, false)),
     }
 
     // Create a mock arrowCell object with time data
@@ -604,14 +707,11 @@ describe("getCellFromArrow", () => {
       // Our internal parsing assumes seconds as default unit.
       content: 1632950000123,
       contentType: null,
-      displayContent: null,
-      cssId: null,
-      cssClass: null,
       type: "columns",
     } as object as DataFrameCell
 
     // Call the getCellFromArrow function
-    getCellFromArrow(MOCK_TIME_COLUMN, arrowCell)
+    getCellFromArrow(MOCK_TIME_COLUMN, arrowCell, undefined, undefined)
 
     // Check if the timestamp is adjusted properly
     expect(MOCK_TIME_COLUMN.getCell).toHaveBeenCalledWith(
@@ -630,7 +730,13 @@ describe("getCellFromArrow", () => {
       },
     }
     const data = new Quiver(element)
-    const cell = getCellFromArrow(MOCK_NUMBER_COLUMN, data.getCell(1, 1))
+
+    const cell = getCellFromArrow(
+      MOCK_NUMBER_COLUMN,
+      data.getCell(0, 1),
+      getStyledCell(data, 0, 1),
+      undefined
+    )
 
     expect(cell).toEqual({
       allowOverlay: true,
@@ -663,7 +769,8 @@ describe("getCellFromArrow", () => {
 
     const cell = getCellFromArrow(
       MOCK_NUMBER_COLUMN,
-      data.getCell(1, 1),
+      data.getCell(0, 1),
+      getStyledCell(data, 0, 1),
       element.styler.styles
     )
 
@@ -703,7 +810,8 @@ it("doesn't apply Pandas Styler CSS for editable columns", () => {
 
   const cell = getCellFromArrow(
     { ...MOCK_NUMBER_COLUMN, isEditable: true },
-    data.getCell(1, 1),
+    data.getCell(0, 1),
+    getStyledCell(data, 0, 1),
     element.styler.styles
   )
 
@@ -862,79 +970,6 @@ describe("getColumnTypeFromArrow", () => {
     "interprets %p as column type: %p",
     (arrowType: ArrowType, expectedType: ColumnCreator) => {
       expect(getColumnTypeFromArrow(arrowType)).toEqual(expectedType)
-    }
-  )
-})
-
-describe("isIntegerType", () => {
-  it.each([
-    [
-      {
-        pandas_type: "float64",
-        numpy_type: "float64",
-      },
-      false,
-    ],
-    [
-      {
-        pandas_type: "int64",
-        numpy_type: "int64",
-      },
-      true,
-    ],
-    [
-      {
-        pandas_type: "object",
-        numpy_type: "int16",
-      },
-      true,
-    ],
-    [
-      {
-        pandas_type: "range",
-        numpy_type: "range",
-      },
-      true,
-    ],
-    [
-      {
-        pandas_type: "uint64",
-        numpy_type: "uint64",
-      },
-      true,
-    ],
-    [
-      {
-        pandas_type: "unicode",
-        numpy_type: "object",
-      },
-      false,
-    ],
-    [
-      {
-        pandas_type: "bool",
-        numpy_type: "bool",
-      },
-      false,
-    ],
-    [
-      {
-        pandas_type: "categorical",
-        numpy_type: "int8",
-      },
-      false,
-    ],
-    [
-      {
-        pandas_type: "object",
-        numpy_type: "interval[int64, both]",
-      },
-      false,
-    ],
-  ])(
-    "interprets %p as integer type: %p",
-    (arrowType: ArrowType, expected: boolean) => {
-      expect(isIntegerType(Quiver.getTypeName(arrowType))).toEqual(expected)
     }
   )
 })

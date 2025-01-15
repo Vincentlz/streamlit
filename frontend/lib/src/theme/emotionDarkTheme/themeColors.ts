@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,12 +37,4 @@ export default {
   dangerBg: transparentize(colors.red60, 0.8),
   primary: colors.red70,
   disabled: colors.gray70,
-  lightestGray: colors.gray20,
-  lightGray: colors.gray30,
-  gray: colors.gray60,
-  darkGray: colors.gray70,
-  red: colors.red80,
-  blue: colors.blue80,
-  green: colors.green80,
-  yellow: colors.yellow80,
 }

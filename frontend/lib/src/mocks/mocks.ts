@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,25 +52,29 @@ export function mockEndpoints(
   overrides: Partial<StreamlitEndpoints> = {}
 ): StreamlitEndpoints {
   return {
-    buildComponentURL: jest.fn(),
-    buildMediaURL: jest.fn(),
-    buildFileUploadURL: jest.fn(),
-    buildAppPageURL: jest
+    buildComponentURL: vi.fn(),
+    buildMediaURL: vi.fn(),
+    buildFileUploadURL: vi.fn(),
+    buildAppPageURL: vi
       .fn()
       .mockImplementation(
         (pageLinkBaseURL: string, page: IAppPage, pageIndex: number) => {
           return `http://mock/app/page/${page.pageName}.${pageIndex}`
         }
       ),
-    uploadFileUploaderFile: jest
+    uploadFileUploaderFile: vi
       .fn()
       .mockRejectedValue(new Error("unimplemented mock endpoint")),
-    deleteFileAtURL: jest
+    deleteFileAtURL: vi
       .fn()
       .mockRejectedValue(new Error("unimplemented mock endpoint")),
-    fetchCachedForwardMsg: jest
+    fetchCachedForwardMsg: vi
       .fn()
       .mockRejectedValue(new Error("unimplemented mock endpoint")),
     ...overrides,
   }
+}
+
+export function mockConvertRemToPx(scssVar: string): number {
+  return Number(scssVar.replace("rem", "")) * 16
 }

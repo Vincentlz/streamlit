@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,12 +23,31 @@ import streamlit as st
 np.random.seed(0)
 random.seed(0)
 
+DF_SIZE = 30
+
+
 random_df = pd.DataFrame(
     np.random.randn(5, 5),
     columns=["Column A", "Column B", "Column C", "Column D", "Column E"],
 )
 
-st.dataframe(random_df)
+fullscreen_df = pd.DataFrame(
+    np.random.randn(DF_SIZE, DF_SIZE),
+    columns=[f"Column {i}" for i in range(DF_SIZE)],
+)
+
+# Configure all columns to be use small width to allow reliable interaction testing:
+st.dataframe(
+    random_df,
+    column_config={
+        "_index": st.column_config.Column(width="small"),
+        "Column A": st.column_config.Column(width="small"),
+        "Column B": st.column_config.Column(width="small"),
+        "Column C": st.column_config.Column(width="small"),
+        "Column D": st.column_config.Column(width="small"),
+        "Column E": st.column_config.Column(width="small"),
+    },
+)
 
 
 if st.button("Create some elements to unmount component"):
@@ -39,7 +58,7 @@ if st.button("Create some elements to unmount component"):
         st.write("Another element")
 
 
-st.data_editor(random_df, num_rows="dynamic")
+st.data_editor(random_df, num_rows="dynamic", key="data_editor")
 
 
 cell_overlay_test_df = pd.DataFrame(
@@ -73,3 +92,5 @@ result = st.data_editor(
 )
 
 st.write("Edited DF:", str(result))
+
+st.dataframe(fullscreen_df)

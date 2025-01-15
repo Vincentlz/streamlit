@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 import React from "react"
 
-import "@testing-library/jest-dom"
 import { screen } from "@testing-library/react"
 
 import { render } from "@streamlit/lib/src/test_util"
@@ -39,7 +38,9 @@ describe("st.iframe", () => {
   it("should render an iframe", () => {
     const props = getProps({})
     render(<IFrame {...props} />)
-    expect(screen.getByTestId("stIFrame")).toBeInTheDocument()
+    const iframeElement = screen.getByTestId("stIFrame")
+    expect(iframeElement).toBeInTheDocument()
+    expect(iframeElement).toHaveClass("stIFrame")
   })
 
   it("should set iframe height", () => {

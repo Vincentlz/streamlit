@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import platform
 import re
 from typing import Literal, Pattern
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Frame, Locator, Page, expect
 
 from e2e_playwright.conftest import wait_for_app_run
 
@@ -44,6 +44,45 @@ def get_checkbox(locator: Locator | Page, label: str | Pattern[str]) -> Locator:
         The element.
     """
     element = locator.get_by_test_id("stCheckbox").filter(has_text=label)
+    expect(element).to_be_visible()
+    return element
+
+
+def get_radio_option(locator: Locator | Page, label: str | Pattern[str]) -> Locator:
+    """Get a radio button widget with the given label.
+
+    Parameters
+    ----------
+
+    locator : Locator
+        The locator to search for the 'radio' element.
+
+    label : str or Pattern[str]
+        The label of the radio element to get.
+
+    Returns
+    -------
+    Locator
+        The element.
+    """
+    element = locator.locator('[data-baseweb="radio"]').filter(has_text=label)
+    expect(element).to_be_visible()
+    return element
+
+
+def get_radio(locator: Locator | Page, label: str | Pattern[str]) -> Locator:
+    """Get a radio widget with the given label.
+
+    Parameters
+    ----------
+
+    locator : Locator
+        The locator to search for the element.
+
+    label : str or Pattern[str]
+        The label of the element to get.
+    """
+    element = locator.get_by_test_id("stRadio").filter(has_text=label)
     expect(element).to_be_visible()
     return element
 
@@ -116,8 +155,10 @@ def get_form_submit_button(
     Locator
         The element.
     """
-    element = locator.get_by_test_id("baseButton-secondaryFormSubmit").filter(
-        has_text=label
+    element = (
+        locator.get_by_test_id("stFormSubmitButton")
+        .filter(has_text=label)
+        .locator("button")
     )
     expect(element).to_be_visible()
     return element
@@ -250,7 +291,7 @@ def expect_markdown(
 
 def expect_exception(
     locator: Locator | Page,
-    expected_message: str | Pattern[str],
+    expected_message: str | Pattern[str] | None = None,
 ) -> None:
     """Expect an exception to be displayed in the app.
 
@@ -260,13 +301,22 @@ def expect_exception(
     locator : Locator
         The locator to search for the exception element.
 
-    expected_message : str or Pattern[str]
+    expected_message : str or Pattern[str] or None
         The expected message to be displayed in the exception.
     """
-    exception_el = locator.get_by_test_id("stException").filter(
-        has_text=expected_message
-    )
+
+    if expected_message is None:
+        exception_el = locator.get_by_test_id("stException")
+    else:
+        exception_el = locator.get_by_test_id("stException").filter(
+            has_text=expected_message
+        )
     expect(exception_el).to_be_visible()
+
+
+def expect_no_exception(locator: Locator | Page):
+    exception_el = locator.get_by_test_id("stException")
+    expect(exception_el).not_to_be_attached()
 
 
 def expect_warning(
@@ -327,6 +377,37 @@ def click_toggle(
         The label of the toggle to click.
     """
     click_checkbox(page, label)
+
+
+def select_radio_option(
+    page: Page,
+    option: str | Pattern[str],
+    label: str | Pattern[str] | None = None,
+) -> None:
+    """Click a radio option with the given option label
+    and wait for the app to run.
+
+    Parameters
+    ----------
+
+    page : Page
+        The page to click the radio option on.
+
+    option : str or Pattern[str]
+        The option label of the radio option to click.
+
+    label : str or Pattern[str] or None
+        The label of the radio group. If None, the radio option
+        is searched on the full page.
+    """
+    locator: Page | Locator = page
+
+    if label is not None:
+        # Get the radio group widget:
+        locator = get_radio(page, label)
+
+    get_radio_option(locator, option).click()
+    wait_for_app_run(page)
 
 
 def click_button(
@@ -438,3 +519,191 @@ def expect_script_state(
         timeout=10000,
         state="attached",
     )
+
+
+def get_element_by_key(locator: Locator | Page, key: str) -> Locator:
+    """Get an element with the given user-defined key.
+
+    Parameters
+    ----------
+
+    locator : Locator
+        The locator to search for the element.
+
+    key : str
+        The user-defined key of the element
+
+    Returns
+    -------
+    Locator
+        The element.
+
+    """
+    class_name = re.sub(r"[^a-zA-Z0-9_-]", "-", key.strip())
+    class_name = f"st-key-{class_name}"
+    return locator.locator(f".{class_name}")
+
+
+def expand_sidebar(app: Page) -> Locator:
+    """Expands the sidebar.
+
+    Returns
+    -------
+    Locator
+        The sidebar element.
+    """
+    app.get_by_test_id("stSidebarCollapsedControl").click()
+    sidebar = app.get_by_test_id("stSidebar")
+    expect(sidebar).to_be_visible()
+    return sidebar
+
+
+def check_top_level_class(app: Page, test_id: str) -> None:
+    """Check that the top level class is correctly set.
+
+    It should be the same as the test id of the element
+    and set on the same component.
+
+    Parameters
+    ----------
+    app : Page
+        The page to search for the element.
+
+    test_id : str
+        The test id of the element to check.
+    """
+    expect(app.get_by_test_id(test_id).first).to_have_class(re.compile(test_id))
+
+
+def register_connection_status_observer(page_or_frame: Page | Frame | None) -> None:
+    if page_or_frame is None:
+        return None
+
+    return page_or_frame.evaluate("""async () => {
+        window.streamlitPlaywrightDebugConnectionStatuses = [];
+        const callback = (mutationList, observer) => {
+            if (!mutationList || mutationList.length === 0) {
+                return
+            }
+            const target = mutationList[0].target
+            if (!target) {
+                return
+            }
+            let state = target
+                            .getAttribute('data-test-connection-state')
+                            .toUpperCase();
+            window.streamlitPlaywrightDebugConnectionStatuses.push(state);
+        }
+        const observer = new MutationObserver(callback);
+        // Observe app status for changes
+        const targetNode = document.querySelector('[data-testid=stApp]')
+        if (!targetNode) {
+            console.log("stApp not found")
+            return
+        }
+        const config = {
+            childList: false,
+            subtree: false,
+            attributeFilter: ['data-test-connection-state']
+        };
+        observer.observe(targetNode, config);
+    }""")
+
+
+def get_observed_connection_statuses(page_or_frame: Page | Frame | None) -> list[str]:
+    if page_or_frame is None:
+        return []
+
+    return page_or_frame.evaluate(
+        "() => window.streamlitPlaywrightDebugConnectionStatuses"
+    )
+
+
+def expect_connection_status(
+    page_or_frame: Page | Frame | None, expected_status: str, callable_action: str
+) -> None:
+    """Wait for the expected_status to appear in the app's connection-state attribute.
+
+    Uses the browser's MutationObserver API to observe changes to the DOM. This way,
+    we will never have a race condition between calling disconnect and checking the
+    status.
+    If the status is not observed within 1 second, the promise will resolved with an
+    error message. We don't use reject because on Firefox this seem to cause an
+    undefined error which is not as precise as our error message.
+    Otherwise, the promise is resolved with the status.
+
+    The resolved status will be uppercased.
+    """
+
+    if page_or_frame is None:
+        return None
+
+    status = page_or_frame.evaluate(
+        """async ([expectedStatus]) => {
+                // the first call to resolve will be the one returned to the caller
+                // so its either the observed status or the timeout. Subsequent
+                // calls are no-ops.
+                const p = new Promise((resolve) => {
+                    // Define a timeoutId so that we can cancel the timeout in the
+                    // callback upon success
+                    let timeoutId = null
+                    let resolved = false
+                    const callback = (mutationList, observer) => {
+                        if (!mutationList || mutationList.length === 0) {
+                            return
+                        }
+                        const target = mutationList[0].target
+                        if (!target) {
+                            return
+                        }
+                        let state = target
+                                        .getAttribute('data-test-connection-state')
+                                        .toUpperCase();
+                        if (state.indexOf(expectedStatus.toUpperCase()) > -1) {
+                            resolved = true
+                            if (timeoutId) clearTimeout(timeoutId)
+                            if (observer) observer.disconnect()
+                            resolve(state)
+                        }
+                    }
+                    const observer = new MutationObserver(callback);
+                    // Observe app status for changes
+                    const targetNode = document.querySelector('[data-testid=stApp]')
+                    if (!targetNode) {
+                        resolve("stApp not found")
+                        return
+                    }
+                    const config = {
+                        childList: false,
+                        subtree: false,
+                        attributeFilter: ['data-test-connection-state']
+                    };
+                    observer.observe(targetNode, config);
+            """
+        + callable_action
+        + """
+                    if (!resolved) {
+                        timeoutId = setTimeout(() => {
+                            if (observer) observer.disconnect()
+                            resolve(`timeout: did not observe status '${expectedStatus}'`)
+                            return
+                        }, 1500);
+                    }
+                })
+
+                const status = await p
+                return status
+            }
+            """,
+        [expected_status],
+    )
+    assert status == expected_status, status
+
+
+def wait_for_all_images_to_be_loaded(page: Page) -> None:
+    # Wait to make sure that the images have been loaded
+    page.wait_for_function("""() => {
+        const images = Array.from(document.querySelectorAll('img'));
+        return images.every(img => img.complete && img.naturalHeight !== 0);
+    }
+    """)

@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ from setuptools.command.install import install
 
 THIS_DIRECTORY = Path(__file__).parent
 
-VERSION = "1.37.1"  # PEP-440
+VERSION = "1.41.1"  # PEP-440
 
 # IMPORTANT: We should try very hard *not* to add dependencies to Streamlit.
 # And if you do add one, make the required version as general as possible:
@@ -33,11 +33,12 @@ INSTALL_REQUIRES = [
     "blinker>=1.0.0, <2",
     "cachetools>=4.0, <6",
     "click>=7.0, <9",
-    "numpy>=1.20, <3",
+    "numpy>=1.23, <3",
     "packaging>=20, <25",
-    # Lowest version with available wheel for 3.7 + amd64 + linux
-    "pandas>=1.3.0, <3",
-    "pillow>=7.1.0, <11",
+    # Pandas <1.4 has a bug related to deleting columns in a DataFrame changing
+    # the index dtype.
+    "pandas>=1.4.0, <3",
+    "pillow>=7.1.0, <12",
     # `protoc` < 3.20 is not able to generate protobuf code compatible with protobuf >= 3.20.
     "protobuf>=3.20, <6",
     # pyarrow is not semantically versioned, gets new major versions frequently, and
@@ -46,12 +47,12 @@ INSTALL_REQUIRES = [
     "pyarrow>=7.0",
     "requests>=2.27, <3",
     "rich>=10.14.0, <14",
-    "tenacity>=8.1.0, <9",
+    "tenacity>=8.1.0, <10",
     "toml>=0.10.1, <2",
     "typing-extensions>=4.3.0, <5",
     # Don't require watchdog on MacOS, since it'll fail without xcode tools.
     # Without watchdog, we fallback to a polling file watcher to check for app changes.
-    "watchdog>=2.1.5, <5; platform_system != 'Darwin'",
+    "watchdog>=2.1.5, <7; platform_system != 'Darwin'",
 ]
 
 # We want to exclude some dependencies in our internal Snowpark conda distribution of
@@ -61,8 +62,7 @@ INSTALL_REQUIRES = [
 SNOWPARK_CONDA_EXCLUDED_DEPENDENCIES = [
     "gitpython>=3.0.7, <4, !=3.1.19",
     "pydeck>=0.8.0b4, <1",
-    # Tornado 6.0.3 was the current Tornado version when Python 3.8, our earliest supported Python version,
-    # was released (Oct 14, 2019).
+    # Tornado 6.0.3 was the current version when Python 3.8 was released (Oct 14, 2019).
     "tornado>=6.0.3, <7",
 ]
 
@@ -72,7 +72,7 @@ if not os.getenv("SNOWPARK_CONDA_BUILD"):
 EXTRA_REQUIRES = {
     "snowflake": [
         "snowflake-snowpark-python[modin]>=1.17.0; python_version<'3.12'",
-        "snowflake-connector-python>=2.8.0; python_version<'3.12'",
+        "snowflake-connector-python>=3.3.0; python_version<'3.12'",
     ]
 }
 
@@ -125,11 +125,11 @@ setup(
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Topic :: Database :: Front-Ends",
         "Topic :: Office/Business :: Financial :: Spreadsheet",
         "Topic :: Scientific/Engineering :: Information Analysis",
@@ -140,7 +140,7 @@ setup(
     # We exclude Python 3.9.7 from our compatible versions due to a bug in that version
     # with typing.Protocol. See https://github.com/streamlit/streamlit/issues/5140 and
     # https://bugs.python.org/issue45121
-    python_requires=">=3.8, !=3.9.7",
+    python_requires=">=3.9, !=3.9.7",
     # PEP 561: https://mypy.readthedocs.io/en/stable/installed_packages.html
     package_data={"streamlit": ["py.typed", "hello/**/*.py"]},
     packages=find_packages(exclude=["tests", "tests.*"]),

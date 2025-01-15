@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,13 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction, wait_for_app_run
-from e2e_playwright.shared.app_utils import expect_help_tooltip
+from e2e_playwright.shared.app_utils import (
+    check_top_level_class,
+    expect_help_tooltip,
+    get_element_by_key,
+)
+
+NUMBER_INPUT_COUNT = 13
 
 
 def test_number_input_widget_display(
@@ -24,7 +30,7 @@ def test_number_input_widget_display(
 ):
     """Test that st.number_input renders correctly."""
     number_input_elements = themed_app.get_by_test_id("stNumberInput")
-    expect(number_input_elements).to_have_count(12)
+    expect(number_input_elements).to_have_count(NUMBER_INPUT_COUNT)
 
     assert_snapshot(number_input_elements.nth(0), name="st_number_input-default")
     assert_snapshot(number_input_elements.nth(1), name="st_number_input-value_1")
@@ -41,6 +47,9 @@ def test_number_input_widget_display(
     assert_snapshot(number_input_elements.nth(10), name="st_number_input-value_none")
     assert_snapshot(
         number_input_elements.nth(11), name="st_number_input-value_none_min_1"
+    )
+    assert_snapshot(
+        number_input_elements.nth(12), name="st_number_input-markdown_label"
     )
 
 
@@ -98,10 +107,11 @@ def test_number_input_updates_value_correctly_on_enter(app: Page):
 
 def test_number_input_has_correct_value_on_increment_click(app: Page):
     """Test that st.number_input has the correct value on increment click."""
-    number_input_up_buttons = app.get_by_test_id("stNumberInput").locator(
-        "button.step-up"
+    number_input_up_buttons = app.get_by_test_id("stNumberInput").get_by_test_id(
+        "stNumberInputStepUp"
     )
-    expect(number_input_up_buttons).to_have_count(11)
+    # The small number input doesn't have the increment button
+    expect(number_input_up_buttons).to_have_count(NUMBER_INPUT_COUNT - 1)
     for i, button in enumerate(number_input_up_buttons.all()):
         if i not in [5, 9]:
             button.click()
@@ -193,3 +203,13 @@ def test_empty_number_input_behaves_correctly(
     expect(app.get_by_test_id("stMarkdown").nth(12)).to_have_text(
         "number input 12 (value from state & min=1) - value: 15", use_inner_text=True
     )
+
+
+def test_custom_css_class_via_key(app: Page):
+    """Test that the element can have a custom css class via the key argument."""
+    expect(get_element_by_key(app, "number_input_9")).to_be_visible()
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stNumberInput")

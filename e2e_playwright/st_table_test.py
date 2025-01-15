@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,8 +15,9 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction
+from e2e_playwright.shared.app_utils import check_top_level_class
 
-TOTAL_TABLE_ELEMENTS = 31
+TOTAL_TABLE_ELEMENTS = 32
 
 
 def test_table_rendering(app: Page, assert_snapshot: ImageCompareFunction):
@@ -37,3 +38,8 @@ def test_themed_table_rendering(
 
     # Only test a single table element to ensure theming is applied correctly:
     assert_snapshot(table_elements.nth(30), name="st_table-themed")
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stTable")

@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,14 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction, wait_for_app_run
-from e2e_playwright.shared.app_utils import expect_help_tooltip, get_expander
+from e2e_playwright.shared.app_utils import (
+    check_top_level_class,
+    expect_help_tooltip,
+    get_element_by_key,
+    get_expander,
+)
 
-CHECKBOX_ELEMENTS = 11
+CHECKBOX_ELEMENTS = 12
 
 
 def test_checkbox_widget_display(
@@ -36,6 +41,7 @@ def test_checkbox_widget_display(
     assert_snapshot(checkbox_elements.nth(5), name="st_checkbox-true_disabled")
     assert_snapshot(checkbox_elements.nth(6), name="st_checkbox-hidden_label")
     assert_snapshot(checkbox_elements.nth(7), name="st_checkbox-collapsed_label")
+    assert_snapshot(checkbox_elements.nth(11), name="st_checkbox-markdown_label")
 
 
 def test_help_tooltip_works(app: Page):
@@ -116,3 +122,13 @@ def test_grouped_checkboxes_height(app: Page, assert_snapshot: ImageCompareFunct
     expect(expander_details.get_by_test_id("stCheckbox").nth(0)).to_have_css(
         "height", "24px"
     )
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stCheckbox")
+
+
+def test_custom_css_class_via_key(app: Page):
+    """Test that the element can have a custom css class via the key argument."""
+    expect(get_element_by_key(app, "checkbox4")).to_be_visible()

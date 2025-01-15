@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Callable, Type, Union
 
 import streamlit.watcher
@@ -147,6 +148,10 @@ def watch_dir(
     glob_pattern: str | None = None,
     allow_nonexistent: bool = False,
 ) -> bool:
+    # Add a trailing slash to the path to ensure
+    # that its interpreted as a directory.
+    path = os.path.join(path, "")
+
     return _watch_path(
         path,
         on_dir_changed,

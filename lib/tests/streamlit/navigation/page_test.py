@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,8 +51,8 @@ class StPagesTest(DeltaGeneratorTestCase):
 
         try:
             st.Page(Foo(), title="Hello")
-        except Exception:
-            pytest.fail("Should not raise exception")
+        except Exception as e:
+            pytest.fail("Should not raise exception: " + str(e))
 
     def test_invalid_icon_raises_exception(self):
         """Test that passing an invalid icon raises an exception."""
@@ -99,6 +99,11 @@ class StPagesTest(DeltaGeneratorTestCase):
         page = st.Page("page_8.py", url_path="/my_url_path")
         assert page.url_path == "my_url_path"
 
+    def test_url_path_strips_trailing_slash(self):
+        """Tests that url path strips leading slash if provided"""
+        page = st.Page("page_8.py", url_path="my_url_path/")
+        assert page.url_path == "my_url_path"
+
     def test_url_path_is_empty_string_if_default(self):
         """Tests that url path is "" if the page is the default page"""
 
@@ -116,6 +121,27 @@ class StPagesTest(DeltaGeneratorTestCase):
 
         with pytest.raises(StreamlitAPIException):
             st.Page(page_9, url_path="")
+
+    def test_non_default_pages_cannot_have_nested_url_path(self):
+        """Tests that an error is raised if the url path contains a nested path"""
+
+        def page_9():
+            pass
+
+        with pytest.raises(StreamlitAPIException):
+            st.Page(page_9, url_path="foo/bar")
+
+    def test_page_with_no_title_raises_api_exception(self):
+        """Tests that an error is raised if the title is empty or inferred to be empty"""
+
+        with pytest.raises(StreamlitAPIException):
+            st.Page("_.py")
+
+        def page_9():
+            pass
+
+        with pytest.raises(StreamlitAPIException):
+            st.Page(page_9, title="    ")
 
     def test_page_run_cannot_run_standalone(self):
         """Test that a page cannot run standalone."""

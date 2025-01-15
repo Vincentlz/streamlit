@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 import React, { ReactElement, useCallback, useEffect } from "react"
 
-import { withFullScreenWrapper } from "@streamlit/lib/src/components/shared/FullScreenWrapper"
 import { BokehChart as BokehChartProto } from "@streamlit/lib/src/proto"
 // We import Bokeh from a vendored source file, because it doesn't play well with Babel (https://github.com/bokeh/bokeh/issues/10658)
 // Importing these files will cause global Bokeh to be mutated
@@ -44,7 +43,7 @@ export function BokehChart({
   width,
   element,
   height,
-}: BokehChartProps): ReactElement {
+}: Readonly<BokehChartProps>): ReactElement {
   const chartId = `bokeh-chart-${element.elementId}`
 
   const memoizedGetChartData = useCallback(() => {
@@ -59,7 +58,6 @@ export function BokehChart({
 
       // if is not fullscreen and useContainerWidth==false, we should use default values
       if (height) {
-        // fullscreen
         chartWidth = width
         chartHeight = height
       } else if (element.useContainerWidth) {
@@ -112,6 +110,8 @@ export function BokehChart({
     }
   }
 
+  // TODO: Update to match React best practices
+  // eslint-disable-next-line react-compiler/react-compiler
   const memoizedUpdateChart = useCallback(updateChart, [
     chartId,
     getChartDimensions,
@@ -129,4 +129,4 @@ export function BokehChart({
   )
 }
 
-export default withFullScreenWrapper(BokehChart)
+export default BokehChart

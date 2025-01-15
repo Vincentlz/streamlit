@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,16 +39,3 @@ export const StyledApp = styled.div(({ theme }) => {
     },
   }
 })
-
-/**
- * The glide-data-grid requires one root level portal element for rendering the cell overlays:
- * https://github.com/glideapps/glide-data-grid/blob/main/packages/core/API.md#htmlcss-prerequisites
- * This is added to the body in ThemedApp.
- */
-export const StyledDataFrameOverlay = styled.div(({ theme }) => ({
-  position: "fixed",
-  top: 0,
-  left: 0,
-  zIndex: theme.zIndices.tablePortal,
-  lineHeight: "100%",
-}))

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 import React from "react"
 
-import { fireEvent, screen } from "@testing-library/react"
-import "@testing-library/jest-dom"
+import { screen } from "@testing-library/react"
+import { userEvent } from "@testing-library/user-event"
 
 import { render } from "@streamlit/lib/src/test_util"
 import { Block as BlockProto } from "@streamlit/lib/src/proto"
@@ -50,19 +50,10 @@ describe("Popover container", () => {
     )
     const popoverButton = screen.getByTestId("stPopover")
     expect(popoverButton).toBeInTheDocument()
+    expect(popoverButton).toHaveClass("stPopover")
   })
 
-  it("renders label as expected", () => {
-    const props = getProps()
-    render(
-      <Popover {...props}>
-        <div>test</div>
-      </Popover>
-    )
-    expect(screen.getByText(props.element.label)).toBeInTheDocument()
-  })
-
-  it("should render the text when opened", () => {
+  it("renders label on the popover", () => {
     const props = getProps()
     render(
       <Popover {...props}>
@@ -70,7 +61,22 @@ describe("Popover container", () => {
       </Popover>
     )
 
-    fireEvent.click(screen.getByText("label"))
+    const popover = screen.getByRole("button", {
+      name: `${props.element.label}`,
+    })
+    expect(popover).toBeInTheDocument()
+  })
+
+  it("should render the text when opened", async () => {
+    const user = userEvent.setup()
+    const props = getProps()
+    render(
+      <Popover {...props}>
+        <div>test</div>
+      </Popover>
+    )
+
+    await user.click(screen.getByText("label"))
     // Text should be visible now
     expect(screen.queryByText("test")).toBeVisible()
   })

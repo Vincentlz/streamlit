@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import {
   IGuestToHostMessage,
   IToolbarItem,
 } from "@streamlit/lib"
-import { SegmentMetricsManager } from "@streamlit/app/src/SegmentMetricsManager"
+import { MetricsManager } from "@streamlit/app/src/MetricsManager"
 
 import {
   StyledActionButtonContainer,
@@ -42,16 +42,18 @@ export function ActionButton({
   onClick,
 }: ActionButtonProps): ReactElement {
   return (
-    <div className="stActionButton" data-testid="stActionButton">
+    <div className="stToolbarActionButton" data-testid="stToolbarActionButton">
       <BaseButton onClick={onClick} kind={BaseButtonKind.HEADER_BUTTON}>
         <StyledActionButtonContainer>
           {icon && (
             <StyledActionButtonIcon
-              data-testid={"stActionButtonIcon"}
+              data-testid="stToolbarActionButtonIcon"
               icon={icon}
             />
           )}
-          {label && <span data-testid="stActionButtonLabel">{label}</span>}
+          {label && (
+            <span data-testid="stToolbarActionButtonLabel">{label}</span>
+          )}
         </StyledActionButtonContainer>
       </BaseButton>
     </div>
@@ -61,7 +63,7 @@ export function ActionButton({
 export interface ToolbarActionsProps {
   sendMessageToHost: (message: IGuestToHostMessage) => void
   hostToolbarItems: IToolbarItem[]
-  metricsMgr: SegmentMetricsManager
+  metricsMgr: MetricsManager
 }
 
 function ToolbarActions({
@@ -70,7 +72,10 @@ function ToolbarActions({
   metricsMgr,
 }: ToolbarActionsProps): ReactElement {
   return (
-    <StyledToolbarActions data-testid="stToolbarActions">
+    <StyledToolbarActions
+      className="stToolbarActions"
+      data-testid="stToolbarActions"
+    >
       {hostToolbarItems.map(({ key, label, icon }) => (
         <ActionButton
           key={key}

@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,12 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction, wait_for_app_run
-from e2e_playwright.shared.app_utils import click_checkbox, expect_help_tooltip
+from e2e_playwright.shared.app_utils import (
+    check_top_level_class,
+    click_checkbox,
+    expect_help_tooltip,
+    get_element_by_key,
+)
 
 
 def select_for_kth_multiselect(
@@ -64,9 +69,20 @@ def del_from_kth_multiselect(page: Page, option_text: str, k: int):
 def test_multiselect_on_load(themed_app: Page, assert_snapshot: ImageCompareFunction):
     """Should show widgets correctly when loaded."""
     multiselect_elements = themed_app.get_by_test_id("stMultiSelect")
-    expect(multiselect_elements).to_have_count(11)
-    for idx, el in enumerate(multiselect_elements.all()):
-        assert_snapshot(el, name="st_multiselect-" + str(idx))
+    expect(multiselect_elements).to_have_count(13)
+
+    assert_snapshot(multiselect_elements.nth(0), name="st_multiselect-placeholder_help")
+    assert_snapshot(multiselect_elements.nth(1), name="st_multiselect-format_func")
+    assert_snapshot(multiselect_elements.nth(2), name="st_multiselect-empty_list")
+    assert_snapshot(multiselect_elements.nth(3), name="st_multiselect-initial_value")
+    assert_snapshot(multiselect_elements.nth(4), name="st_multiselect-long_values")
+    assert_snapshot(multiselect_elements.nth(5), name="st_multiselect-disabled")
+    assert_snapshot(multiselect_elements.nth(6), name="st_multiselect-hidden_label")
+    assert_snapshot(multiselect_elements.nth(7), name="st_multiselect-collapsed_label")
+    # The other multiselect widgets do not need to be screenshot tested since they
+    # don't have any visually interesting differences.
+    assert_snapshot(multiselect_elements.nth(11), name="st_multiselect-narrow_column")
+    assert_snapshot(multiselect_elements.nth(12), name="st_multiselect-markdown_label")
 
 
 def test_help_tooltip_works(app: Page):
@@ -77,7 +93,7 @@ def test_help_tooltip_works(app: Page):
 def test_multiselect_initial_value(app: Page):
     """Should show the correct initial values."""
     text_elements = app.get_by_test_id("stText")
-    expect(text_elements).to_have_count(12)
+    expect(text_elements).to_have_count(13)
 
     expected = [
         "value 1: []",
@@ -92,6 +108,7 @@ def test_multiselect_initial_value(app: Page):
         "value 10: []",
         "value 11: []",
         "multiselect changed: False",
+        "value 12: ['A long option']",
     ]
 
     for text_element, expected_text in zip(text_elements.all(), expected):
@@ -128,6 +145,17 @@ def test_multiselect_long_values_in_dropdown(
     dropdown_elems = app.locator("li").all()
     for idx, el in enumerate(dropdown_elems):
         assert_snapshot(el, name="st_multiselect-dropdown_long_label_" + str(idx))
+
+
+def test_multiselect_long_values_in_narrow_column(
+    app: Page, assert_snapshot: ImageCompareFunction
+):
+    """Should show long values correctly (with ellipses) when in narrow column widths."""
+    multiselect_elem = app.get_by_test_id("stMultiSelect").nth(11)
+    wait_for_app_run(app)
+    # Wait for list items to be loaded in
+    app.locator("li").all()
+    assert_snapshot(multiselect_elem, name="st_multiselect-dropdown_narrow_column")
 
 
 def test_multiselect_register_callback(app: Page):
@@ -208,7 +236,7 @@ def test_multiselect_option_over_max_selections(app: Page):
     """Should show an error when more than max_selections got selected."""
     click_checkbox(app, "set_multiselect_9")
     expect(app.get_by_test_id("stException")).to_contain_text(
-        "Multiselect has 2 options selected but max_selections\nis set to 1"
+        "Multiselect has 2 options selected but max_selections is set to 1"
     )
 
 
@@ -219,3 +247,13 @@ def test_multiselect_double_selection(app: Page):
     expect(app.get_by_test_id("stText").nth(1)).to_have_text(
         "value 2: ['female', 'male']"
     )
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stMultiSelect")
+
+
+def test_custom_css_class_via_key(app: Page):
+    """Test that the element can have a custom css class via the key argument."""
+    expect(get_element_by_key(app, "multiselect 9")).to_be_visible()

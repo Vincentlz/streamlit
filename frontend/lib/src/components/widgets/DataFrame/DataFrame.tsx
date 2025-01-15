@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import {
   Search,
 } from "@emotion-icons/material-outlined"
 
-import { FormClearHelper } from "@streamlit/lib/src/components/widgets/Form"
+import { useFormClearHelper } from "@streamlit/lib/src/components/widgets/Form"
 import { withFullScreenWrapper } from "@streamlit/lib/src/components/shared/FullScreenWrapper"
 import { Quiver } from "@streamlit/lib/src/dataframes/Quiver"
 import { Arrow as ArrowProto } from "@streamlit/lib/src/proto"
@@ -42,15 +42,20 @@ import {
   WidgetInfo,
   WidgetStateManager,
 } from "@streamlit/lib/src/WidgetStateManager"
-import { debounce, isNullOrUndefined } from "@streamlit/lib/src/util/utils"
+import { isNullOrUndefined } from "@streamlit/lib/src/util/utils"
 import Toolbar, {
   ToolbarAction,
 } from "@streamlit/lib/src/components/shared/Toolbar"
 import { LibContext } from "@streamlit/lib/src/components/core/LibContext"
+import { ElementFullscreenContext } from "@streamlit/lib/src/components/shared/ElementFullscreen/ElementFullscreenContext"
+import { useRequiredContext } from "@streamlit/lib/src/hooks/useRequiredContext"
+import { useDebouncedCallback } from "@streamlit/lib/src/hooks/useDebouncedCallback"
 
 import EditingState, { getColumnName } from "./EditingState"
 import {
   useColumnLoader,
+  useColumnPinning,
+  useColumnReordering,
   useColumnSizer,
   useColumnSort,
   useCustomRenderer,
@@ -58,23 +63,12 @@ import {
   useDataEditor,
   useDataExporter,
   useDataLoader,
+  useRowHover,
   useSelectionHandler,
   useTableSizer,
   useTooltips,
 } from "./hooks"
-import {
-  BORDER_THRESHOLD,
-  MAX_COLUMN_AUTO_WIDTH,
-  MAX_COLUMN_WIDTH,
-  MIN_COLUMN_WIDTH,
-  ROW_HEIGHT,
-} from "./hooks/useTableSizer"
-import {
-  BaseColumn,
-  getTextCell,
-  ImageCellEditor,
-  toGlideColumn,
-} from "./columns"
+import { getTextCell, ImageCellEditor, toGlideColumn } from "./columns"
 import Tooltip from "./Tooltip"
 import { StyledResizableContainer } from "./styled-components"
 
@@ -106,15 +100,12 @@ export interface DataframeState {
 export interface DataFrameProps {
   element: ArrowProto
   data: Quiver
-  width: number
-  height?: number
   disabled: boolean
   widgetMgr: WidgetStateManager
-  isFullScreen?: boolean
-  expand?: () => void
-  collapse?: () => void
   disableFullscreenMode?: boolean
   fragmentId?: string
+  width: number
+  height?: number
 }
 
 /**
@@ -122,30 +113,33 @@ export interface DataFrameProps {
  *
  * @param element - The element's proto message
  * @param data - The Arrow data to render (extracted from the proto message)
- * @param width - The width of the container
- * @param height - The height of the container
  * @param disabled - Whether the widget is disabled
  * @param widgetMgr - The widget manager
- * @param isFullScreen - Whether the widget is in full screen mode
  */
 function DataFrame({
   element,
   data,
-  width: containerWidth,
-  height: containerHeight,
   disabled,
   widgetMgr,
-  isFullScreen,
   disableFullscreenMode,
-  expand,
-  collapse,
   fragmentId,
 }: Readonly<DataFrameProps>): ReactElement {
+  const {
+    expanded: isFullScreen,
+    expand,
+    collapse,
+    width: containerWidth,
+    height: containerHeight,
+  } = useRequiredContext(ElementFullscreenContext)
+
   const resizableRef = React.useRef<Resizable>(null)
   const dataEditorRef = React.useRef<DataEditorRef>(null)
   const resizableContainerRef = React.useRef<HTMLDivElement>(null)
 
-  const { theme, headerIcons, tableBorderRadius } = useCustomTheme()
+  const gridTheme = useCustomTheme()
+
+  const { getRowThemeOverride, onItemHovered: handleRowHover } =
+    useRowHover(gridTheme)
 
   const {
     libConfig: { enforceDownloadInNewTab = false }, // Default to false, if no libConfig, e.g. for tests
@@ -186,7 +180,7 @@ function DataFrame({
 
   // Number of rows of the table minus 1 for the header row:
   const dataDimensions = data.dimensions
-  const originalNumRows = Math.max(0, dataDimensions.rows - 1)
+  const originalNumRows = Math.max(0, dataDimensions.numDataRows)
 
   // For empty tables, we show an extra row that
   // contains "empty" as a way to indicate that the table is empty.
@@ -194,7 +188,7 @@ function DataFrame({
     originalNumRows === 0 &&
     // We don't show empty state for dynamic mode with a table that has
     // data columns defined.
-    !(element.editingMode === DYNAMIC && dataDimensions.dataColumns > 0)
+    !(element.editingMode === DYNAMIC && dataDimensions.numDataColumns > 0)
 
   // For large tables, we apply some optimizations to handle large data
   const isLargeTable = originalNumRows > LARGE_TABLE_ROWS_THRESHOLD
@@ -217,7 +211,14 @@ function DataFrame({
     setNumRows(editingState.current.getNumRows())
   }, [originalNumRows])
 
-  const { columns: originalColumns } = useColumnLoader(element, data, disabled)
+  const [columnOrder, setColumnOrder] = React.useState(element.columnOrder)
+
+  const { columns: originalColumns, setColumnConfigMapping } = useColumnLoader(
+    element,
+    data,
+    disabled,
+    columnOrder
+  )
 
   /**
    * On the first rendering, try to load initial widget state if
@@ -251,6 +252,8 @@ function DataFrame({
     },
     // We only want to run this effect once during the initial component load
     // so we disable the eslint rule.
+    // TODO: Update to match React best practices
+    // eslint-disable-next-line react-compiler/react-compiler
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   )
@@ -266,18 +269,16 @@ function DataFrame({
     useColumnSort(originalNumRows, originalColumns, getOriginalCellContent)
 
   /**
-   * This callback is used to synchronize the selection state with the state
-   * of the widget state of the component. This might also send a rerun message
-   * to the backend if the selection state has changed.
+   * Synchronizes the selection state with the state of the widget state of the component.
+   * This might also send a rerun message to the backend if the selection state has changed.
+   *
+   * This is the inner version to be used by the debounce callback below.
+   * Its split out to allow better dependency inspection.
    *
    * @param newSelection - The new selection state
    */
-  // The debounce method doesn't allow dependency inspection. Therefore, we
-  // need to disable the eslint rule for exhaustive-deps.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const syncSelectionState = React.useCallback(
-    // Use debounce to prevent rapid updates to the widget state.
-    debounce(DEBOUNCE_TIME_MS, (newSelection: GridSelection) => {
+  const innerSyncSelectionState = React.useCallback(
+    (newSelection: GridSelection) => {
       // If we want to support selections also with the editable mode,
       // we would need to integrate the `syncEditState` and `syncSelections` functions
       // into a single function that updates the widget state with both the editing
@@ -321,15 +322,21 @@ function DataFrame({
           fragmentId
         )
       }
-    }),
+    },
     [
+      columns,
       element.id,
       element.formId,
       widgetMgr,
       fragmentId,
       getOriginalIndex,
-      getColumnName,
     ]
+  )
+
+  // Use a debounce to prevent rapid updates to the widget state.
+  const { debouncedCallback: syncSelectionState } = useDebouncedCallback(
+    innerSyncSelectionState,
+    DEBOUNCE_TIME_MS
   )
 
   const {
@@ -359,6 +366,8 @@ function DataFrame({
     // to play around and get to the bottom of it.
     clearSelection(true, true)
     // Only run this on changes to the fullscreen mode:
+    // TODO: Update to match React best practices
+    // eslint-disable-next-line react-compiler/react-compiler
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFullScreen])
 
@@ -425,6 +434,8 @@ function DataFrame({
     },
     // We only want to run this effect once during the initial component load
     // so we disable the eslint rule.
+    // TODO: Update to match React best practices
+    // eslint-disable-next-line react-compiler/react-compiler
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   )
@@ -445,47 +456,42 @@ function DataFrame({
    * This callback is used to synchronize the editing state with
    * the widget state of the component. This might also send a rerun message
    * to the backend if the editing state has changed.
+   *
+   * This is the inner version to be used by the debounce callback below.
+   * Its split out to allow better dependency inspection.
    */
-  // The debounce method doesn't allow dependency inspection. Therefore, we
-  // need to disable the eslint rule for exhaustive-deps.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const syncEditState = React.useCallback(
-    // Use debounce to prevent rapid updates to the widget state.
-    debounce(DEBOUNCE_TIME_MS, () => {
-      const currentEditingState = editingState.current.toJson(columns)
-      let currentWidgetState = widgetMgr.getStringValue({
-        id: element.id,
-        formId: element.formId,
-      } as WidgetInfo)
+  const innerSyncEditState = React.useCallback(() => {
+    const currentEditingState = editingState.current.toJson(columns)
+    let currentWidgetState = widgetMgr.getStringValue({
+      id: element.id,
+      formId: element.formId,
+    } as WidgetInfo)
 
-      if (currentWidgetState === undefined) {
-        // Create an empty widget state
-        currentWidgetState = new EditingState(0).toJson([])
-      }
+    if (currentWidgetState === undefined) {
+      // Create an empty widget state
+      currentWidgetState = new EditingState(0).toJson([])
+    }
 
-      // Only update if there is actually a difference between editing and widget state
-      if (currentEditingState !== currentWidgetState) {
-        widgetMgr.setStringValue(
-          {
-            id: element.id,
-            formId: element.formId,
-          } as WidgetInfo,
-          currentEditingState,
-          {
-            fromUi: true,
-          },
-          fragmentId
-        )
-      }
-    }),
-    [
-      element.id,
-      element.formId,
-      widgetMgr,
-      fragmentId,
-      columns,
-      editingState.current,
-    ]
+    // Only update if there is actually a difference between editing and widget state
+    if (currentEditingState !== currentWidgetState) {
+      widgetMgr.setStringValue(
+        {
+          id: element.id,
+          formId: element.formId,
+        } as WidgetInfo,
+        currentEditingState,
+        {
+          fromUi: true,
+        },
+        fragmentId
+      )
+    }
+  }, [columns, element.id, element.formId, widgetMgr, fragmentId])
+
+  // Use a debounce to prevent rapid updates to the widget state.
+  const { debouncedCallback: syncEditState } = useDebouncedCallback(
+    innerSyncEditState,
+    DEBOUNCE_TIME_MS
   )
 
   const { exportToCsv } = useDataExporter(
@@ -508,10 +514,11 @@ function DataFrame({
       clearSelection
     )
 
-  const { tooltip, clearTooltip, onItemHovered } = useTooltips(
-    columns,
-    getCellContent
-  )
+  const {
+    tooltip,
+    clearTooltip,
+    onItemHovered: handleTooltips,
+  } = useTooltips(columns, getCellContent)
 
   const { drawCell, customRenderers } = useCustomRenderer(columns)
 
@@ -522,16 +529,22 @@ function DataFrame({
   const { columns: glideColumns, onColumnResize } =
     useColumnSizer(transformedColumns)
 
+  // To activate the group row feature (multi-level headers),
+  // we need more than one header row.
+  const usesGroupRow = data.dimensions.numHeaderRows > 1
   const {
     minHeight,
     maxHeight,
     minWidth,
     maxWidth,
+    rowHeight,
     resizableSize,
     setResizableSize,
   } = useTableSizer(
     element,
+    gridTheme,
     numRows,
+    usesGroupRow,
     containerWidth,
     containerHeight,
     isFullScreen
@@ -547,41 +560,41 @@ function DataFrame({
         contentAlign: "center",
         allowOverlay: false,
         themeOverride: {
-          textDark: theme.textLight,
+          textDark: gridTheme.glideTheme.textLight,
         },
         span: [0, Math.max(columns.length - 1, 0)],
       } as GridCell
     },
-    [columns, theme.textLight]
+    [columns, gridTheme.glideTheme.textLight]
   )
 
-  // This is required for the form clearing functionality:
-  React.useEffect(() => {
-    if (!element.formId) {
-      return
-    }
+  const onFormCleared = React.useCallback(() => {
+    // Clear the editing state and the selection state
+    resetEditingState()
+    clearSelection()
+  }, [resetEditingState, clearSelection])
 
-    const formClearHelper = new FormClearHelper()
-    formClearHelper.manageFormClearListener(widgetMgr, element.formId, () => {
-      // Clear the editing state and the selection state
-      resetEditingState()
-      clearSelection()
-    })
-
-    return () => {
-      formClearHelper.disconnect()
-    }
-  }, [element.formId, resetEditingState, clearSelection, widgetMgr])
+  useFormClearHelper({ element, widgetMgr, onFormCleared })
 
   const isDynamicAndEditable =
     !isEmptyTable && element.editingMode === DYNAMIC && !disabled
 
-  // The index columns are always at the beginning of the table,
-  // so we can just count them to determine the number of columns
-  // that should be frozen.
-  const freezeColumns = isEmptyTable
-    ? 0
-    : columns.filter((col: BaseColumn) => col.isIndex).length
+  const { pinColumn, unpinColumn, freezeColumns } = useColumnPinning(
+    columns,
+    isEmptyTable,
+    containerWidth,
+    gridTheme.minColumnWidth,
+    clearSelection,
+    setColumnConfigMapping
+  )
+
+  const { onColumnMoved } = useColumnReordering(
+    columns,
+    freezeColumns,
+    pinColumn,
+    unpinColumn,
+    setColumnOrder
+  )
 
   // Determine if the table requires horizontal or vertical scrolling:
   React.useEffect(() => {
@@ -600,7 +613,6 @@ function DataFrame({
         // are activated or deactivated.
         // const scrollAreaBounds = dataEditorRef.current?.getBounds()
         // Also see: https://github.com/glideapps/glide-data-grid/issues/784
-
         if (scrollAreaBounds) {
           setHasVerticalScroll(
             scrollAreaBounds.height >
@@ -616,8 +628,8 @@ function DataFrame({
 
   return (
     <StyledResizableContainer
-      data-testid="stDataFrame"
       className="stDataFrame"
+      data-testid="stDataFrame"
       hasCustomizedScrollbars={hasCustomizedScrollbars}
       ref={resizableContainerRef}
       onMouseDown={e => {
@@ -684,7 +696,7 @@ function DataFrame({
           // are not relevant since they are not synced to the backend
           // at the moment.
           <ToolbarAction
-            label={"Clear selection"}
+            label="Clear selection"
             icon={Close}
             onClick={() => {
               clearSelection()
@@ -694,7 +706,7 @@ function DataFrame({
         )}
         {isDynamicAndEditable && isRowSelected && (
           <ToolbarAction
-            label={"Delete row(s)"}
+            label="Delete row(s)"
             icon={Delete}
             onClick={() => {
               if (onDelete) {
@@ -706,7 +718,7 @@ function DataFrame({
         )}
         {isDynamicAndEditable && !isRowSelected && (
           <ToolbarAction
-            label={"Add row"}
+            label="Add row"
             icon={Add}
             onClick={() => {
               if (onRowAppended) {
@@ -719,14 +731,14 @@ function DataFrame({
         )}
         {!isLargeTable && !isEmptyTable && (
           <ToolbarAction
-            label={"Download as CSV"}
+            label="Download as CSV"
             icon={FileDownload}
             onClick={() => exportToCsv()}
           />
         )}
         {!isEmptyTable && (
           <ToolbarAction
-            label={"Search"}
+            label="Search"
             icon={Search}
             onClick={() => {
               if (!showSearch) {
@@ -745,8 +757,8 @@ function DataFrame({
         ref={resizableRef}
         defaultSize={resizableSize}
         style={{
-          border: `1px solid ${theme.borderColor}`,
-          borderRadius: `${tableBorderRadius}`,
+          border: `${gridTheme.tableBorderWidth}px solid ${gridTheme.glideTheme.borderColor}`,
+          borderRadius: `${gridTheme.tableBorderRadius}`,
         }}
         minHeight={minHeight}
         maxHeight={maxHeight}
@@ -763,33 +775,36 @@ function DataFrame({
           bottomLeft: false,
           topLeft: false,
         }}
-        grid={[1, ROW_HEIGHT]}
-        snapGap={ROW_HEIGHT / 3}
+        grid={[1, rowHeight]}
+        snapGap={rowHeight / 3}
         onResizeStop={(_event, _direction, _ref, _delta) => {
           if (resizableRef.current) {
+            const borderThreshold = 2 * gridTheme.tableBorderWidth
             setResizableSize({
               width: resizableRef.current.size.width,
               height:
                 // Add additional pixels if it is stretched to full width
                 // to allow the full cell border to be visible
                 maxHeight - resizableRef.current.size.height ===
-                BORDER_THRESHOLD
-                  ? resizableRef.current.size.height + BORDER_THRESHOLD
+                borderThreshold
+                  ? resizableRef.current.size.height + borderThreshold
                   : resizableRef.current.size.height,
             })
           }
         }}
       >
         <GlideDataEditor
-          className="glideDataEditor"
+          // The className is used in styled components:
+          className="stDataFrameGlideDataEditor"
+          data-testid="stDataFrameGlideDataEditor"
           ref={dataEditorRef}
           columns={glideColumns}
           rows={isEmptyTable ? 1 : numRows}
-          minColumnWidth={MIN_COLUMN_WIDTH}
-          maxColumnWidth={MAX_COLUMN_WIDTH}
-          maxColumnAutoWidth={MAX_COLUMN_AUTO_WIDTH}
-          rowHeight={ROW_HEIGHT}
-          headerHeight={ROW_HEIGHT}
+          minColumnWidth={gridTheme.minColumnWidth}
+          maxColumnWidth={gridTheme.maxColumnWidth}
+          maxColumnAutoWidth={gridTheme.maxColumnAutoWidth}
+          rowHeight={rowHeight}
+          headerHeight={gridTheme.defaultHeaderHeight}
           getCellContent={isEmptyTable ? getEmptyStateContent : getCellContent}
           onColumnResize={isTouchDevice ? undefined : onColumnResize}
           // Configure resize indicator to only show on the header:
@@ -808,8 +823,16 @@ function DataFrame({
           rangeSelect={isTouchDevice ? "cell" : "rect"}
           columnSelect={"none"}
           rowSelect={"none"}
-          // Enable tooltips on hover of a cell or column header:
-          onItemHovered={onItemHovered}
+          // Enable interactive column reordering:
+          onColumnMoved={
+            // Column selection is not compatible with column reordering.
+            isColumnSelectionActivated ? undefined : onColumnMoved
+          }
+          // Enable tooltips and row hovering theme on hover of a cell or column header:
+          onItemHovered={(args: GridMouseEventArgs) => {
+            handleRowHover?.(args)
+            handleTooltips?.(args)
+          }}
           // Activate keybindings:
           keybindings={{ downFill: true }}
           // Search needs to be activated manually, to support search
@@ -863,7 +886,8 @@ function DataFrame({
               }
             }
           }}
-          theme={theme}
+          theme={gridTheme.glideTheme}
+          getRowThemeOverride={getRowThemeOverride}
           onMouseMove={(args: GridMouseEventArgs) => {
             // Determine if the dataframe is focused or not
             if (args.kind === "out-of-bounds" && isFocused) {
@@ -897,7 +921,7 @@ function DataFrame({
           // Custom image editor to render single images:
           imageEditorOverride={ImageCellEditor}
           // Add our custom SVG header icons:
-          headerIcons={headerIcons}
+          headerIcons={gridTheme.headerIcons}
           // Add support for user input validation:
           validateCell={validateCell}
           // The default setup is read only, and therefore we deactivate paste here:
@@ -909,8 +933,8 @@ function DataFrame({
               kind: "checkbox",
               checkboxStyle: "square",
               theme: {
-                bgCell: theme.bgHeader,
-                bgCellMedium: theme.bgHeader,
+                bgCell: gridTheme.glideTheme.bgHeader,
+                bgCellMedium: gridTheme.glideTheme.bgHeader,
               },
             },
             rowSelectionMode: isMultiRowSelectionActivated ? "multi" : "auto",
@@ -967,8 +991,8 @@ function DataFrame({
                 kind: "checkbox",
                 checkboxStyle: "square",
                 theme: {
-                  bgCell: theme.bgHeader,
-                  bgCellMedium: theme.bgHeader,
+                  bgCell: gridTheme.glideTheme.bgHeader,
+                  bgCellMedium: gridTheme.glideTheme.bgHeader,
                 },
               },
               rowSelectionMode: "multi",
@@ -992,4 +1016,4 @@ function DataFrame({
   )
 }
 
-export default withFullScreenWrapper(DataFrame, true)
+export default withFullScreenWrapper(DataFrame)

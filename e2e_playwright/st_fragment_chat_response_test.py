@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ from e2e_playwright.shared.app_utils import click_checkbox
 def test_chat_response(app: Page, assert_snapshot: ImageCompareFunction):
     # Take a screenshot of the original chart
     assert_snapshot(
-        app.get_by_test_id("stArrowVegaLiteChart"),
+        app.get_by_test_id("stVegaLiteChart"),
         name="chart_before_fragment_rerun",
     )
 
@@ -35,6 +35,6 @@ def test_chat_response(app: Page, assert_snapshot: ImageCompareFunction):
 
     # Take a screenshot of the modified chart
     assert_snapshot(
-        app.get_by_test_id("stArrowVegaLiteChart"),
+        app.get_by_test_id("stVegaLiteChart"),
         name="chart_after_fragment_rerun",
     )

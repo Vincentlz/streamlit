@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 import React from "react"
 
-import "@testing-library/jest-dom"
-import { fireEvent, screen } from "@testing-library/react"
+import { screen } from "@testing-library/react"
+import { userEvent } from "@testing-library/user-event"
 
 import { mockSessionInfo, render } from "@streamlit/lib"
-import { SegmentMetricsManager } from "@streamlit/app/src/SegmentMetricsManager"
+import { MetricsManager } from "@streamlit/app/src/MetricsManager"
 
 import ToolbarActions, {
   ActionButton,
@@ -34,28 +34,32 @@ describe("ActionButton", () => {
   ): ActionButtonProps => ({
     label: "the label",
     icon: "star.svg",
-    onClick: jest.fn(),
+    onClick: vi.fn(),
     ...extended,
   })
 
   it("renders without crashing", () => {
     render(<ActionButton {...getProps()} />)
 
-    expect(screen.getByTestId("stActionButton")).toBeInTheDocument()
+    expect(screen.getByTestId("stToolbarActionButton")).toBeInTheDocument()
   })
 
   it("does not render icon if not provided", () => {
     render(<ActionButton {...getProps({ icon: undefined })} />)
 
-    expect(screen.getByTestId("stActionButton")).toBeInTheDocument()
-    expect(screen.queryByTestId("stActionButtonIcon")).not.toBeInTheDocument()
+    expect(screen.getByTestId("stToolbarActionButton")).toBeInTheDocument()
+    expect(
+      screen.queryByTestId("stToolbarActionButtonIcon")
+    ).not.toBeInTheDocument()
   })
 
   it("does not render label if not provided", () => {
     render(<ActionButton {...getProps({ label: undefined })} />)
 
-    expect(screen.getByTestId("stActionButton")).toBeInTheDocument()
-    expect(screen.queryByTestId("stActionButtonLabel")).not.toBeInTheDocument()
+    expect(screen.getByTestId("stToolbarActionButton")).toBeInTheDocument()
+    expect(
+      screen.queryByTestId("stToolbarActionButtonLabel")
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -67,8 +71,8 @@ describe("ToolbarActions", () => {
       { key: "favorite", icon: "star.svg" },
       { key: "share", label: "Share" },
     ],
-    sendMessageToHost: jest.fn(),
-    metricsMgr: new SegmentMetricsManager(mockSessionInfo()),
+    sendMessageToHost: vi.fn(),
+    metricsMgr: new MetricsManager(mockSessionInfo()),
     ...extended,
   })
 
@@ -82,19 +86,20 @@ describe("ToolbarActions", () => {
     expect(screen.getByTestId("stToolbarActions")).toHaveStyle("display: flex")
   })
 
-  it("calls sendMessageToHost with correct args when clicked", () => {
+  it("calls sendMessageToHost with correct args when clicked", async () => {
+    const user = userEvent.setup()
     const props = getProps()
     render(<ToolbarActions {...props} />)
 
-    const favoriteButton = screen.getAllByTestId("baseButton-header")[0]
-    fireEvent.click(favoriteButton)
+    const favoriteButton = screen.getAllByTestId("stBaseButton-header")[0]
+    await user.click(favoriteButton)
     expect(props.sendMessageToHost).toHaveBeenLastCalledWith({
       type: "TOOLBAR_ITEM_CALLBACK",
       key: "favorite",
     })
 
     const shareButton = screen.getByRole("button", { name: "Share" })
-    fireEvent.click(shareButton)
+    await user.click(shareButton)
     expect(props.sendMessageToHost).toHaveBeenLastCalledWith({
       type: "TOOLBAR_ITEM_CALLBACK",
       key: "share",

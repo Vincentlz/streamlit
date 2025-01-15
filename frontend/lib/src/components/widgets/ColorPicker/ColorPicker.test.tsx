@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 import React from "react"
 
-import "@testing-library/jest-dom"
-import { fireEvent, screen } from "@testing-library/react"
+import { act, fireEvent, screen } from "@testing-library/react"
+import { userEvent } from "@testing-library/user-event"
 
 import { render } from "@streamlit/lib/src/test_util"
 import { ColorPicker as ColorPickerProto } from "@streamlit/lib/src/proto"
@@ -38,8 +38,8 @@ const getProps = (
   width: 0,
   disabled: false,
   widgetMgr: new WidgetStateManager({
-    sendRerunBackMsg: jest.fn(),
-    formsDataChanged: jest.fn(),
+    sendRerunBackMsg: vi.fn(),
+    formsDataChanged: vi.fn(),
   }),
   ...widgetProps,
 })
@@ -50,11 +50,12 @@ describe("ColorPicker widget", () => {
     render(<ColorPicker {...props} />)
     const colorPicker = screen.getByTestId("stColorPicker")
     expect(colorPicker).toBeInTheDocument()
+    expect(colorPicker).toHaveClass("stColorPicker")
   })
 
   it("sets widget value on mount", () => {
     const props = getProps()
-    jest.spyOn(props.widgetMgr, "setStringValue")
+    vi.spyOn(props.widgetMgr, "setStringValue")
 
     render(<ColorPicker {...props} />)
 
@@ -68,7 +69,7 @@ describe("ColorPicker widget", () => {
 
   it("can pass fragmentId to setStringValue", () => {
     const props = getProps(undefined, { fragmentId: "myFragmentId" })
-    jest.spyOn(props.widgetMgr, "setStringValue")
+    vi.spyOn(props.widgetMgr, "setStringValue")
 
     render(<ColorPicker {...props} />)
 
@@ -80,33 +81,37 @@ describe("ColorPicker widget", () => {
     )
   })
 
-  it("renders a default color in the preview and the color picker", () => {
+  it("renders a default color in the preview and the color picker", async () => {
+    const user = userEvent.setup()
     const props = getProps()
     render(<ColorPicker {...props} />)
 
-    const colorBlock = screen.getByTestId("stColorBlock")
-    fireEvent.click(colorBlock)
+    const colorBlock = screen.getByTestId("stColorPickerBlock")
+    await user.click(colorBlock)
     expect(colorBlock).toHaveStyle("background-color: #000000")
 
     const colorInput = screen.getByRole("textbox")
     expect(colorInput).toHaveValue("#000000")
   })
 
-  it("updates its widget value when it's changed", () => {
+  it("updates its widget value when it's changed", async () => {
+    const user = userEvent.setup()
     const props = getProps()
-    jest.spyOn(props.widgetMgr, "setStringValue")
+    vi.spyOn(props.widgetMgr, "setStringValue")
 
     render(<ColorPicker {...props} />)
 
     const newColor = "#e91e63"
-    const colorBlock = screen.getByTestId("stColorBlock")
-    fireEvent.click(colorBlock)
+    const colorBlock = screen.getByTestId("stColorPickerBlock")
+    await user.click(colorBlock)
 
     // Our widget should be updated.
     const colorInput = screen.getByRole("textbox")
+    // TODO: Utilize user-event instead of fireEvent
+    // eslint-disable-next-line testing-library/prefer-user-event
     fireEvent.change(colorInput, { target: { value: newColor } })
     // Close out of the popover
-    fireEvent.click(colorBlock)
+    await user.click(colorBlock)
 
     // And the WidgetMgr should also be updated.
     expect(props.widgetMgr.setStringValue).toHaveBeenLastCalledWith(
@@ -117,24 +122,26 @@ describe("ColorPicker widget", () => {
     )
   })
 
-  it("resets its value when form is cleared", () => {
+  it("resets its value when form is cleared", async () => {
     // Create a widget in a clearOnSubmit form
+    const user = userEvent.setup()
     const props = getProps({ formId: "form" })
-    jest.spyOn(props.widgetMgr, "setStringValue")
-    props.widgetMgr.setFormClearOnSubmit("form", true)
+    vi.spyOn(props.widgetMgr, "setStringValue")
+    props.widgetMgr.setFormSubmitBehaviors("form", true)
 
     render(<ColorPicker {...props} />)
 
     // Choose a new color
     const newColor = "#e91e63"
-    const colorBlock = screen.getByTestId("stColorBlock")
-    fireEvent.click(colorBlock)
+    const colorBlock = screen.getByTestId("stColorPickerBlock")
+    await user.click(colorBlock)
 
-    // Update the color
     const colorInput = screen.getByRole("textbox")
+    // TODO: Utilize user-event instead of fireEvent
+    // eslint-disable-next-line testing-library/prefer-user-event
     fireEvent.change(colorInput, { target: { value: newColor } })
     // Close out of the popover
-    fireEvent.click(colorBlock)
+    await user.click(colorBlock)
 
     expect(colorInput).toHaveValue(newColor)
     expect(colorBlock).toHaveStyle(`background-color: ${newColor}`)
@@ -145,8 +152,10 @@ describe("ColorPicker widget", () => {
       undefined
     )
 
-    // "Submit" the form
-    props.widgetMgr.submitForm("form", undefined)
+    act(() => {
+      // "Submit" the form
+      props.widgetMgr.submitForm("form", undefined)
+    })
 
     // Our widget should be reset, and the widgetMgr should be updated
     expect(colorBlock).toHaveStyle("background-color: #000000")

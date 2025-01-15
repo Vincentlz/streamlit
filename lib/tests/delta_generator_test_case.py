@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,7 +36,8 @@ from streamlit.runtime.scriptrunner import (
     add_script_run_ctx,
     get_script_run_ctx,
 )
-from streamlit.runtime.scriptrunner.script_requests import ScriptRequests
+from streamlit.runtime.scriptrunner_utils.script_requests import ScriptRequests
+from streamlit.runtime.session_manager import SessionManager
 from streamlit.runtime.state import SafeSessionState, SessionState
 from streamlit.web.server.server import MEDIA_ENDPOINT, UPLOAD_FILE_ENDPOINT
 
@@ -60,7 +61,7 @@ class DeltaGeneratorTestCase(unittest.TestCase):
             session_state=SafeSessionState(SessionState(), lambda: None),
             uploaded_file_mgr=MemoryUploadedFileManager(UPLOAD_FILE_ENDPOINT),
             main_script_path="",
-            user_info={"email": "test@test.com"},
+            user_info={"email": "test@example.com"},
             script_requests=ScriptRequests(),
             fragment_storage=MemoryFragmentStorage(),
             pages_manager=PagesManager(""),
@@ -75,6 +76,7 @@ class DeltaGeneratorTestCase(unittest.TestCase):
         mock_runtime.cache_storage_manager = MemoryCacheStorageManager()
         mock_runtime.media_file_mgr = MediaFileManager(self.media_file_storage)
         mock_runtime.uploaded_file_mgr = self.script_run_ctx.uploaded_file_mgr
+        mock_runtime._session_mgr = MagicMock(spec=SessionManager)
         Runtime._instance = mock_runtime
 
     def tearDown(self):

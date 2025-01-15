@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,14 +15,19 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction, wait_for_app_run
-from e2e_playwright.shared.app_utils import expect_help_tooltip
+from e2e_playwright.shared.app_utils import (
+    check_top_level_class,
+    click_form_button,
+    expect_help_tooltip,
+    get_element_by_key,
+)
 
 
 def test_select_slider_rendering(
     themed_app: Page, assert_snapshot: ImageCompareFunction
 ):
     st_select_sliders = themed_app.get_by_test_id("stSlider")
-    expect(st_select_sliders).to_have_count(11)
+    expect(st_select_sliders).to_have_count(12)
 
     assert_snapshot(
         st_select_sliders.nth(0),
@@ -31,6 +36,7 @@ def test_select_slider_rendering(
     assert_snapshot(st_select_sliders.nth(4), name="st_select_slider-disabled")
     assert_snapshot(st_select_sliders.nth(5), name="st_select_slider-hidden_label")
     assert_snapshot(st_select_sliders.nth(6), name="st_select_slider-label_collapsed")
+    assert_snapshot(st_select_sliders.nth(11), name="st_select_slider-markdown_label")
 
 
 def test_help_tooltip_works(app: Page):
@@ -91,7 +97,9 @@ def test_select_slider_calls_callback(app: Page):
 def test_select_slider_label_realigns_when_expander_opens(app: Page):
     app.get_by_test_id("stExpander").locator("summary").click()
     app.get_by_test_id("stExpander").locator("summary").click()
-    expect(app.get_by_test_id("stThumbValue").nth(11)).not_to_have_css("left", "0px")
+    expect(app.get_by_test_id("stSliderThumbValue").nth(11)).not_to_have_css(
+        "left", "0px"
+    )
 
 
 def test_select_slider_works_in_forms(app: Page):
@@ -106,8 +114,7 @@ def test_select_slider_works_in_forms(app: Page):
 
     # need to wait for the actual component value to update and then submit
     app.wait_for_timeout(200)
-    app.get_by_test_id("baseButton-secondaryFormSubmit").click()
-    wait_for_app_run(app)
+    click_form_button(app, "Submit")
 
     expect(app.get_by_text("select_slider-in-form selection: 3")).to_be_visible()
 
@@ -123,3 +130,13 @@ def test_select_slider_works_with_fragments(app: Page):
     wait_for_app_run(app)
     expect(app.get_by_text("select_slider-in-fragment selection: 3")).to_be_visible()
     expect(app.get_by_text("Runs: 1")).to_be_visible()
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stSlider")
+
+
+def test_custom_css_class_via_key(app: Page):
+    """Test that the element can have a custom css class via the key argument."""
+    expect(get_element_by_key(app, "select_slider8")).to_be_visible()

@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ class BrowserWebSocketHandlerTest(ServerTestCase):
 
     @tornado.testing.gen_test
     async def test_write_forward_msg_reraises_websocket_closed_error(self):
-        """`write_forward_msg` should re-raise WebSocketClosedError as
+        """`write_forward_msg` should re-raise WebSocketClosedError
         as SessionClientDisconnectedError.
         """
 

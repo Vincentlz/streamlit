@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,11 +39,11 @@ export const StyledFileDropzoneSection = styled.section<StyledFileDropzone>(
   })
 )
 
-export const StyledFileDropzoneInstructions = styled.div(() => ({
+export const StyledFileDropzoneInstructions = styled.div({
   marginRight: "auto",
   alignItems: "center",
   display: "flex",
-}))
+})
 
 export const StyledFileDropzoneInstructionsFileUploaderIcon = styled.span(
   ({ theme }) => ({
@@ -72,9 +72,10 @@ export const StyledUploadedFiles = styled.div(({ theme }) => ({
   paddingRight: theme.spacing.lg,
 }))
 
-export const StyledUploadedFilesList = styled.ul(() => ({
+export const StyledUploadedFilesList = styled.ul(({ theme }) => ({
   listStyleType: "none",
-  marginBottom: 0,
+  margin: theme.spacing.none,
+  padding: theme.spacing.none,
 }))
 
 export const StyledUploadedFilesListItem = styled.li(({ theme }) => ({

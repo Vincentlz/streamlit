@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,18 @@
 
 import React from "react"
 
-import "@testing-library/jest-dom"
 import { screen } from "@testing-library/react"
 
 import { render } from "@streamlit/lib/src/test_util"
-import { mockTheme } from "@streamlit/lib/src/mocks/mockTheme"
 import { WidgetStateManager } from "@streamlit/lib/src/WidgetStateManager"
 
-import { ArrowVegaLiteChart, PropsWithFullScreen } from "./ArrowVegaLiteChart"
+import ArrowVegaLiteChart, { Props } from "./ArrowVegaLiteChart"
 import { VegaLiteChartElement } from "./arrowUtils"
 
 const getProps = (
   elementProps: Partial<VegaLiteChartElement> = {},
-  props: Partial<PropsWithFullScreen> = {}
-): PropsWithFullScreen => ({
+  props: Partial<Props> = {}
+): Props => ({
   element: {
     data: null,
     id: "1",
@@ -60,20 +58,19 @@ const getProps = (
     vegaLiteTheme: "streamlit",
     ...elementProps,
   },
-  theme: mockTheme.emotion,
   width: 0,
   widgetMgr: new WidgetStateManager({
-    sendRerunBackMsg: jest.fn(),
-    formsDataChanged: jest.fn(),
+    sendRerunBackMsg: vi.fn(),
+    formsDataChanged: vi.fn(),
   }),
-  height: 0,
-  isFullScreen: false,
   ...props,
 })
 
 describe("ArrowVegaLiteChart", () => {
   it("renders without crashing", () => {
     render(<ArrowVegaLiteChart {...getProps()} />)
-    expect(screen.getByTestId("stArrowVegaLiteChart")).toBeInTheDocument()
+    const vegaLiteChart = screen.getByTestId("stVegaLiteChart")
+    expect(vegaLiteChart).toBeInTheDocument()
+    expect(vegaLiteChart).toHaveClass("stVegaLiteChart")
   })
 })

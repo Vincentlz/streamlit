@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,87 +14,41 @@
  * limitations under the License.
  */
 
-import React, { Fragment } from "react"
-
 import styled from "@emotion/styled"
-import axios from "axios"
 
 import {
-  isNullOrUndefined,
-  notNullOrUndefined,
-} from "@streamlit/lib/src/util/utils"
+  LOG,
+  PING_MAXIMUM_RETRY_PERIOD_MS,
+  PING_MINIMUM_RETRY_PERIOD_MS,
+  WEBSOCKET_STREAM_PATH,
+  WEBSOCKET_TIMEOUT_MS,
+} from "@streamlit/app/src/connection/constants"
+import {
+  Event,
+  OnConnectionStateChange,
+  OnMessage,
+  OnRetry,
+} from "@streamlit/app/src/connection/types"
 import {
   BackMsg,
   BaseUriParts,
-  buildHttpUri,
   buildWsUri,
   ForwardMsg,
   ForwardMsgCache,
+  getCookie,
   IBackMsg,
   IHostConfigResponse,
+  isNullOrUndefined,
   logError,
   logMessage,
   logWarning,
+  notNullOrUndefined,
   PerformanceEvents,
-  Resolver,
   SessionInfo,
   StreamlitEndpoints,
 } from "@streamlit/lib"
 import { ConnectionState } from "@streamlit/app/src/connection/ConnectionState"
-
-/**
- * Name of the logger.
- */
-const LOG = "WebsocketConnection"
-
-/**
- * The path where we should ping (via HTTP) to see if the server is up.
- */
-const SERVER_PING_PATH = "_stcore/health"
-
-/**
- * The path to fetch the host configuration and allowed-message-origins.
- */
-const HOST_CONFIG_PATH = "_stcore/host-config"
-
-/**
- * The path of the server's websocket endpoint.
- */
-const WEBSOCKET_STREAM_PATH = "_stcore/stream"
-
-/**
- * Min and max wait time between pings in millis.
- */
-const PING_MINIMUM_RETRY_PERIOD_MS = 500
-const PING_MAXIMUM_RETRY_PERIOD_MS = 1000 * 60
-
-/**
- * Ping timeout in millis.
- */
-const PING_TIMEOUT_MS = 15 * 1000
-
-/**
- * Timeout when attempting to connect to a websocket, in millis.
- */
-const WEBSOCKET_TIMEOUT_MS = 15 * 1000
-
-/**
- * If the ping retrieves a 403 status code a message will be displayed.
- * This constant is the link to the documentation.
- */
-export const CORS_ERROR_MESSAGE_DOCUMENTATION_LINK =
-  "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS"
-
-type OnMessage = (ForwardMsg: any) => void
-type OnConnectionStateChange = (
-  connectionState: ConnectionState,
-  errMsg?: string
-) => void
-type OnRetry = (
-  totalTries: number,
-  errorNode: React.ReactNode,
-  retryTimeout: number
-) => void
+import { doInitPings } from "@streamlit/app/src/connection/DoInitPings"
 
 export interface Args {
   /** The application's SessionInfo instance */
@@ -170,14 +124,6 @@ interface MessageQueue {
  *                    :
  *   <ANY_STATE> ──────────────> DISCONNECTED_FOREVER
  */
-type Event =
-  | "INITIALIZED"
-  | "CONNECTION_CLOSED"
-  | "CONNECTION_ERROR"
-  | "CONNECTION_SUCCEEDED"
-  | "CONNECTION_TIMED_OUT"
-  | "SERVER_PING_SUCCEEDED"
-  | "FATAL_ERROR" // Unrecoverable error. This should never happen!
 
 /**
  * This class connects to the server and gets deltas over a websocket connection.
@@ -394,11 +340,12 @@ export class WebsocketConnection {
    */
   private async getSessionTokens(): Promise<Array<string>> {
     const hostAuthToken = await this.args.claimHostAuthToken()
+    const xsrfCookie = getCookie("_streamlit_xsrf")
     this.args.resetHostAuthToken()
     return [
       // NOTE: We have to set the auth token to some arbitrary placeholder if
       // not provided since the empty string is an invalid protocol option.
-      hostAuthToken ?? "PLACEHOLDER_AUTH_TOKEN",
+      hostAuthToken ?? xsrfCookie ?? "PLACEHOLDER_AUTH_TOKEN",
       ...(this.args.sessionInfo.last?.sessionId
         ? [this.args.sessionInfo.last?.sessionId]
         : []),
@@ -440,7 +387,7 @@ export class WebsocketConnection {
     const localWebsocket = this.websocket
     const checkWebsocket = (): boolean => localWebsocket === this.websocket
 
-    this.websocket.onmessage = (event: MessageEvent) => {
+    this.websocket.addEventListener("message", (event: MessageEvent) => {
       if (checkWebsocket()) {
         this.handleMessage(event.data).catch(reason => {
           const err = `Failed to process a Websocket message (${reason})`
@@ -448,30 +395,30 @@ export class WebsocketConnection {
           this.stepFsm("FATAL_ERROR", err)
         })
       }
-    }
+    })
 
-    this.websocket.onopen = () => {
+    this.websocket.addEventListener("open", () => {
       if (checkWebsocket()) {
         logMessage(LOG, "WebSocket onopen")
         this.stepFsm("CONNECTION_SUCCEEDED")
       }
-    }
+    })
 
-    this.websocket.onclose = () => {
+    this.websocket.addEventListener("close", () => {
       if (checkWebsocket()) {
         logWarning(LOG, "WebSocket onclose")
         this.closeConnection()
         this.stepFsm("CONNECTION_CLOSED")
       }
-    }
+    })
 
-    this.websocket.onerror = () => {
+    this.websocket.addEventListener("error", () => {
       if (checkWebsocket()) {
         logError(LOG, "WebSocket onerror")
         this.closeConnection()
         this.stepFsm("CONNECTION_ERROR")
       }
-    }
+    })
   }
 
   private setConnectionTimeout(uri: string): void {
@@ -595,151 +542,12 @@ export class WebsocketConnection {
   }
 }
 
-export const StyledBashCode = styled.code({
+export const StyledBashCode = styled.code(({ theme }) => ({
+  fontFamily: theme.genericFonts.codeFont,
+  fontSize: theme.fontSizes.sm,
   "&::before": {
     content: '"$"',
+    // eslint-disable-next-line streamlit-custom/no-hardcoded-theme-values
     marginRight: "1ex",
   },
-})
-
-/**
- * Attempts to connect to the URIs in uriList (in round-robin fashion) and
- * retries forever until one of the URIs responds with 'ok'.
- * Returns a promise with the index of the URI that worked.
- */
-export function doInitPings(
-  uriPartsList: BaseUriParts[],
-  minimumTimeoutMs: number,
-  maximumTimeoutMs: number,
-  retryCallback: OnRetry,
-  onHostConfigResp: (resp: IHostConfigResponse) => void
-): Promise<number> {
-  const resolver = new Resolver<number>()
-  let totalTries = 0
-  let uriNumber = 0
-
-  // Hoist the connect() declaration.
-  let connect = (): void => {}
-
-  const retryImmediately = (): void => {
-    uriNumber++
-    if (uriNumber >= uriPartsList.length) {
-      uriNumber = 0
-    }
-
-    connect()
-  }
-
-  const retry = (errorNode: React.ReactNode): void => {
-    // Adjust retry time by +- 20% to spread out load
-    const jitter = Math.random() * 0.4 - 0.2
-    // Exponential backoff to reduce load from health pings when experiencing
-    // persistent failure. Starts at minimumTimeoutMs.
-    const timeoutMs =
-      totalTries === 1
-        ? minimumTimeoutMs
-        : minimumTimeoutMs * 2 ** (totalTries - 1) * (1 + jitter)
-    const retryTimeout = Math.min(maximumTimeoutMs, timeoutMs)
-
-    retryCallback(totalTries, errorNode, retryTimeout)
-
-    window.setTimeout(retryImmediately, retryTimeout)
-  }
-
-  const retryWhenTheresNoResponse = (): void => {
-    const uriParts = uriPartsList[uriNumber]
-    const uri = new URL(buildHttpUri(uriParts, ""))
-
-    if (uri.hostname === "localhost") {
-      retry(
-        <Fragment>
-          <p>
-            Is Streamlit still running? If you accidentally stopped Streamlit,
-            just restart it in your terminal:
-          </p>
-          <pre>
-            <StyledBashCode>streamlit run yourscript.py</StyledBashCode>
-          </pre>
-        </Fragment>
-      )
-    } else {
-      retry("Connection failed with status 0.")
-    }
-  }
-
-  const retryWhenIsForbidden = (): void => {
-    retry(
-      <Fragment>
-        <p>Cannot connect to Streamlit (HTTP status: 403).</p>
-        <p>
-          If you are trying to access a Streamlit app running on another
-          server, this could be due to the app's{" "}
-          <a href={CORS_ERROR_MESSAGE_DOCUMENTATION_LINK}>CORS</a> settings.
-        </p>
-      </Fragment>
-    )
-  }
-
-  connect = () => {
-    const uriParts = uriPartsList[uriNumber]
-    const healthzUri = buildHttpUri(uriParts, SERVER_PING_PATH)
-    const hostConfigUri = buildHttpUri(uriParts, HOST_CONFIG_PATH)
-
-    logMessage(LOG, `Attempting to connect to ${healthzUri}.`)
-
-    if (uriNumber === 0) {
-      totalTries++
-    }
-
-    // We fire off requests to the server's healthz and host-config
-    // endpoints in parallel to avoid having to wait on too many sequential
-    // round trip network requests before we can try to establish a WebSocket
-    // connection. Technically, it would have been possible to implement a
-    // single "get server health and origins whitelist" endpoint, but we chose
-    // not to do so as it's semantically cleaner to not give the healthcheck
-    // endpoint additional responsibilities.
-    Promise.all([
-      axios.get(healthzUri, { timeout: PING_TIMEOUT_MS }),
-      axios.get(hostConfigUri, { timeout: PING_TIMEOUT_MS }),
-    ])
-      .then(([_, hostConfigResp]) => {
-        onHostConfigResp(hostConfigResp.data)
-        resolver.resolve(uriNumber)
-      })
-      .catch(error => {
-        if (error.code === "ECONNABORTED") {
-          return retry("Connection timed out.")
-        }
-
-        if (error.response) {
-          // The request was made and the server responded with a status code
-          // that falls out of the range of 2xx
-
-          const { data, status } = error.response
-
-          if (status === /* NO RESPONSE */ 0) {
-            return retryWhenTheresNoResponse()
-          }
-          if (status === 403) {
-            return retryWhenIsForbidden()
-          }
-          return retry(
-            `Connection failed with status ${status}, ` +
-              `and response "${data}".`
-          )
-        }
-        if (error.request) {
-          // The request was made but no response was received
-          // `error.request` is an instance of XMLHttpRequest in the browser and an instance of
-          // http.ClientRequest in node.js
-          return retryWhenTheresNoResponse()
-        }
-        // Something happened in setting up the request that triggered an Error
-        return retry(error.message)
-      })
-  }
-
-  connect()
-
-  return resolver.promise
-}
+}))

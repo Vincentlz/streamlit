@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import pytest
 from streamlit.errors import StreamlitAPIException
 from streamlit.runtime.state import SafeSessionState, SessionState, SessionStateProxy
 from streamlit.runtime.state.common import (
-    GENERATED_WIDGET_ID_PREFIX,
+    GENERATED_ELEMENT_ID_PREFIX,
     require_valid_user_key,
 )
 
@@ -47,7 +47,7 @@ def _create_mock_session_state(
     MagicMock(return_value=_create_mock_session_state({"foo": "bar"})),
 )
 class SessionStateProxyTests(unittest.TestCase):
-    reserved_key = f"{GENERATED_WIDGET_ID_PREFIX}-some_key"
+    reserved_key = f"{GENERATED_ELEMENT_ID_PREFIX}-some_key"
 
     def setUp(self):
         self.session_state_proxy = SessionStateProxy()

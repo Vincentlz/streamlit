@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@ import os
 from unittest.mock import mock_open, patch
 
 import pytest
-
-from tests.constants import SNOWFLAKE_CREDENTIAL_FILE
 
 # Do not import any Streamlit modules here! See below for details.
 
@@ -91,10 +89,6 @@ def pytest_configure(config: pytest.Config):
         except ImportError:
             raise pytest.UsageError(
                 "The snowflake-snowpark-python package is not installed."
-            )
-        if not SNOWFLAKE_CREDENTIAL_FILE.exists():
-            raise pytest.UsageError(
-                f"Missing credential file: {SNOWFLAKE_CREDENTIAL_FILE}"
             )
 
 

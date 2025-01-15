@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,7 +40,9 @@ def get_session_state() -> SafeSessionState:
     st.session_state.
     """
     global _state_use_warning_already_displayed
-    from streamlit.runtime.scriptrunner import get_script_run_ctx
+    from streamlit.runtime.scriptrunner_utils.script_run_context import (
+        get_script_run_ctx,
+    )
 
     ctx = get_script_run_ctx()
 

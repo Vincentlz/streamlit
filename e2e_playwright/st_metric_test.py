@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction
-from e2e_playwright.shared.app_utils import expect_help_tooltip
+from e2e_playwright.shared.app_utils import check_top_level_class, expect_help_tooltip
 
 
 def test_first_metric_in_first_row(app: Page):
@@ -76,6 +76,13 @@ def test_none_results_in_dash_in_value(
     )
 
 
+def test_border(themed_app: Page, assert_snapshot: ImageCompareFunction):
+    assert_snapshot(
+        themed_app.get_by_test_id("stMetric").nth(10),
+        name="st_metric-border",
+    )
+
+
 def test_label_visibility_set_to_hidden(
     themed_app: Page, assert_snapshot: ImageCompareFunction
 ):
@@ -96,6 +103,15 @@ def test_label_visibility_set_to_collapse(
     )
 
 
+def test_markdown_label_support(
+    themed_app: Page, assert_snapshot: ImageCompareFunction
+):
+    assert_snapshot(
+        themed_app.get_by_test_id("stMetric").nth(11),
+        name="st_metric-markdown_label",
+    )
+
+
 def test_ellipses_and_help_shows_up_properly(
     themed_app: Page, assert_snapshot: ImageCompareFunction
 ):
@@ -105,3 +121,25 @@ def test_ellipses_and_help_shows_up_properly(
         metric_element,
         name="st_metric-help_and_ellipses",
     )
+
+
+def test_code_in_help_shows_up_properly(
+    themed_app: Page, assert_snapshot: ImageCompareFunction
+):
+    metric_element = themed_app.get_by_test_id("stMetric").nth(9)
+    hover_target = metric_element.get_by_test_id("stTooltipHoverTarget")
+    tooltip_content = themed_app.get_by_test_id("stTooltipContent")
+
+    expect(hover_target).to_be_visible()
+    hover_target.hover()
+    expect(tooltip_content).to_have_text("Test help with code select * from table")
+
+    assert_snapshot(
+        tooltip_content,
+        name="st_metric-code_in_help",
+    )
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stMetric")

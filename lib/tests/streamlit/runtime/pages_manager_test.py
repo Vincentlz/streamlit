@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -77,26 +77,6 @@ class PagesManagerV2Test(unittest.TestCase):
 
         # This signifies the change to V2
         self.pages_manager.set_pages({})
-
-    def test_run_with_active_hash(self):
-        """Ensure the active script is set correctly"""
-        main_script_hash = self.pages_manager.main_script_hash
-        assert self.pages_manager.get_active_script_hash() == main_script_hash
-
-        with self.pages_manager.run_with_active_hash("new_hash"):
-            assert self.pages_manager.get_active_script_hash() == "new_hash"
-
-        assert self.pages_manager.get_active_script_hash() == main_script_hash
-
-    def test_reset_active_script_hash(self):
-        """Ensure the active script hash is reset correctly"""
-        main_script_hash = self.pages_manager.main_script_hash
-        assert self.pages_manager.get_active_script_hash() == main_script_hash
-
-        self.pages_manager.set_active_script_hash("new_hash")
-        self.pages_manager.reset_active_script_hash()
-
-        assert self.pages_manager.get_active_script_hash() == main_script_hash
 
     def test_get_page_script_valid_hash(self):
         """Ensure the page script is provided with valid page hash specified"""

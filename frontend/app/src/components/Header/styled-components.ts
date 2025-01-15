@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ export const StyledHeaderDecoration = styled.div(({ theme }) => ({
   top: theme.spacing.none,
   right: theme.spacing.none,
   left: theme.spacing.none,
-  height: "0.125rem",
+  height: theme.sizes.headerDecorationHeight,
   backgroundImage: `linear-gradient(90deg, ${theme.colors.red70}, #fffd80)`,
   zIndex: theme.zIndices.header,
 }))

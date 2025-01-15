@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,15 @@ import React from "react"
 
 import { DataEditorProps, GridCell } from "@glideapps/glide-data-grid"
 
-import { notNullOrUndefined } from "@streamlit/lib/src/util/utils"
-import { Quiver } from "@streamlit/lib/src/dataframes/Quiver"
 import { getCellFromArrow } from "@streamlit/lib/src/components/widgets/DataFrame/arrowUtils"
-import EditingState from "@streamlit/lib/src/components/widgets/DataFrame/EditingState"
 import {
   BaseColumn,
   getErrorCell,
 } from "@streamlit/lib/src/components/widgets/DataFrame/columns"
+import EditingState from "@streamlit/lib/src/components/widgets/DataFrame/EditingState"
+import { getStyledCell } from "@streamlit/lib/src/dataframes/pandasStylerUtils"
+import { Quiver } from "@streamlit/lib/src/dataframes/Quiver"
+import { notNullOrUndefined } from "@streamlit/lib/src/util/utils"
 
 type DataLoaderReturn = Pick<DataEditorProps, "getCellContent">
 
@@ -49,15 +50,15 @@ function useDataLoader(
     ([col, row]: readonly [number, number]): GridCell => {
       if (col > columns.length - 1) {
         return getErrorCell(
-          "Column index out of bounds.",
-          "This should never happen. Please report this bug."
+          "Column index out of bounds",
+          "This error should never happen. Please report this bug."
         )
       }
 
       if (row > numRows - 1) {
         return getErrorCell(
-          "Row index out of bounds.",
-          "This should never happen. Please report this bug."
+          "Row index out of bounds",
+          "This error should never happen. Please report this bug."
         )
       }
       const column = columns[col]
@@ -77,21 +78,29 @@ function useDataLoader(
           // This is not expected to happen. All cells to added rows should
           // be defined. If not, we return a specific error cell.
           return getErrorCell(
-            "Error during cell creation.",
-            "This should never happen. Please report this bug. " +
+            "Error during cell creation",
+            "This error should never happen. Please report this bug. " +
               `No cell found for an added row: col=${originalCol}; row=${originalRow}`
           )
         }
       }
 
       try {
-        // Arrow has the header in first row
-        const arrowCell = data.getCell(originalRow + 1, originalCol)
-        return getCellFromArrow(column, arrowCell, data.cssStyles)
+        // We skip all header rows to get to to the actual data rows.
+        // in th Arrow data.
+        const arrowCell = data.getCell(originalRow, originalCol)
+        const styledCell = getStyledCell(data, originalRow, originalCol)
+
+        return getCellFromArrow(
+          column,
+          arrowCell,
+          styledCell,
+          data.styler?.cssStyles
+        )
       } catch (error) {
         return getErrorCell(
-          "Error during cell creation.",
-          `This should never happen. Please report this bug. \nError: ${error}`
+          "Error during cell creation",
+          `This error should never happen. Please report this bug. \nError: ${error}`
         )
       }
     },

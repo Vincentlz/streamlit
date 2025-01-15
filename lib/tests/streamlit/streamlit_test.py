@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,11 @@ import matplotlib
 
 import streamlit as st
 from streamlit import __version__
+from tests.streamlit.element_mocks import (
+    CONTAINER_ELEMENTS,
+    NON_WIDGET_ELEMENTS,
+    WIDGET_ELEMENTS,
+)
 
 
 def get_version():
@@ -40,6 +45,42 @@ def get_version():
             return m.group("version")
 
 
+# Commands that don't result in rendered elements in the frontend
+NON_ELEMENT_COMMANDS: set[str] = {
+    "Page",
+    "cache",
+    "cache_data",
+    "cache_resource",
+    "connection",
+    "context",
+    "experimental_fragment",
+    "experimental_get_query_params",
+    "experimental_set_query_params",
+    "experimental_user",
+    "fragment",
+    "get_option",
+    "login",
+    "logout",
+    "navigation",
+    "query_params",
+    "rerun",
+    "secrets",
+    "session_state",
+    "set_option",
+    "set_page_config",
+    "sidebar",
+    "stop",
+    "switch_page",
+}
+
+# Element commands that are exposed on the DeltaGenerator
+# and on the top-level Streamlit namespace.
+# We extract them from the element mocks.
+ELEMENT_COMMANDS: set[str] = {
+    command for command, _ in WIDGET_ELEMENTS + NON_WIDGET_ELEMENTS + CONTAINER_ELEMENTS
+}
+
+
 class StreamlitTest(unittest.TestCase):
     """Test Streamlit.__init__.py."""
 
@@ -50,7 +91,7 @@ class StreamlitTest(unittest.TestCase):
     def test_get_option(self):
         """Test streamlit.get_option."""
         # This is set in lib/tests/conftest.py to False
-        self.assertEqual(False, st.get_option("browser.gatherUsageStats"))
+        self.assertFalse(st.get_option("browser.gatherUsageStats"))
 
     def test_matplotlib_uses_agg(self):
         """Test that Streamlit uses the 'Agg' backend for matplotlib."""
@@ -71,6 +112,32 @@ class StreamlitTest(unittest.TestCase):
             self.assertEqual(matplotlib.get_backend().lower(), "agg")
         sys.platform = ORIG_PLATFORM
 
+    def test_ensure_completeness_element_mocks(self):
+        """Test that we have mocked all elements in the public API.
+
+        The full public API should be covered by:
+        - element_mocks.WIDGET_ELEMENTS
+        - element_mocks.NON_WIDGET_ELEMENTS
+        - element_mocks.CONTAINER_ELEMENTS
+        - NON_ELEMENT_COMMANDS
+        """
+        api = {
+            k
+            for k, v in st.__dict__.items()
+            if not k.startswith("_") and not isinstance(v, type(st))
+        }
+
+        mocked_elements = {
+            element
+            for element, _ in WIDGET_ELEMENTS + NON_WIDGET_ELEMENTS + CONTAINER_ELEMENTS
+        }
+        mocked_elements.update(NON_ELEMENT_COMMANDS)
+        assert api == mocked_elements, (
+            "There are new public commands that might be needed to be added to element "
+            "mocks or NON_ELEMENT_COMMANDS. Please add it to the correct list of "
+            "mocked elements or NON_ELEMENT_COMMANDS."
+        )
+
     def test_public_api(self):
         """Test that we don't accidentally remove (or add) symbols
         to the public `st` API.
@@ -80,114 +147,7 @@ class StreamlitTest(unittest.TestCase):
             for k, v in st.__dict__.items()
             if not k.startswith("_") and not isinstance(v, type(st))
         }
-        self.assertEqual(
-            api,
-            {
-                # DeltaGenerator methods:
-                "altair_chart",
-                "area_chart",
-                "audio",
-                "balloons",
-                "bar_chart",
-                "bokeh_chart",
-                "button",
-                "caption",
-                "camera_input",
-                "chat_input",
-                "chat_message",
-                "checkbox",
-                "code",
-                "columns",
-                "context",
-                "tabs",
-                "container",
-                "dataframe",
-                "data_editor",
-                "date_input",
-                "dialog",
-                "divider",
-                "download_button",
-                "expander",
-                "pydeck_chart",
-                "empty",
-                "error",
-                "exception",
-                "feedback",
-                "file_uploader",
-                "form",
-                "form_submit_button",
-                "graphviz_chart",
-                "header",
-                "help",
-                "html",
-                "image",
-                "info",
-                "json",
-                "latex",
-                "line_chart",
-                "link_button",
-                "logo",
-                "map",
-                "markdown",
-                "metric",
-                "multiselect",
-                "number_input",
-                "page_link",
-                "plotly_chart",
-                "popover",
-                "progress",
-                "pyplot",
-                "radio",
-                "scatter_chart",
-                "selectbox",
-                "select_slider",
-                "slider",
-                "snow",
-                "subheader",
-                "success",
-                "status",
-                "table",
-                "text",
-                "text_area",
-                "text_input",
-                "time_input",
-                "title",
-                "toast",
-                "toggle",
-                "vega_lite_chart",
-                "video",
-                "warning",
-                "write",
-                "write_stream",
-                "color_picker",
-                "sidebar",
-                # Other modules the user should have access to:
-                "echo",
-                "spinner",
-                "set_page_config",
-                "stop",
-                "rerun",
-                "switch_page",
-                "cache",
-                "secrets",
-                "session_state",
-                "query_params",
-                "cache_data",
-                "cache_resource",
-                "navigation",
-                "Page",
-                "fragment",
-                # Experimental APIs:
-                "experimental_dialog",
-                "experimental_fragment",
-                "experimental_get_query_params",
-                "experimental_set_query_params",
-                "experimental_user",
-                "get_option",
-                "set_option",
-                "connection",
-            },
-        )
+        self.assertEqual(api, ELEMENT_COMMANDS.union(NON_ELEMENT_COMMANDS))
 
     def test_pydoc(self):
         """Test that we can run pydoc on the streamlit package"""

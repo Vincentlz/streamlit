@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,29 @@ export const StyledChromePicker = styled.div(({ theme }) => ({
   div: {
     fontFamily: `${theme.genericFonts.bodyFont} !important`,
   },
+  // The overrides below are a bit hacky but unfortunately the ChromePicker component
+  // doesn't offer a way to override labels and inputs, see
+  // https://github.com/casesandberg/react-color/issues/643
+  label: {
+    fontSize: `${theme.fontSizes.sm} !important`,
+    color: `${theme.colors.bodyText} !important`,
+  },
+  input: {
+    fontSize: `${theme.fontSizes.md} !important`,
+    height: `${theme.sizes.minElementHeight} !important`,
+    backgroundColor: `${theme.colors.secondaryBg} !important`,
+    color: `${theme.colors.bodyText} !important`,
+    borderRadius: `${theme.radii.default} !important`,
+    boxShadow: `none !important`,
+    "&:focus-visible": {
+      outline: `${theme.sizes.borderWidth} solid ${theme.colors.primary} !important`,
+    },
+  },
+  svg: {
+    // This is the arrow button on the right. The hover color for the background is
+    // apparently set by JS and not CSS, so we can't override it.
+    fill: `${theme.colors.bodyText} !important`,
+  },
 }))
 
 export interface StyledColorPreviewProps {
@@ -48,11 +71,12 @@ export const StyledColorPreview = styled.div<StyledColorPreviewProps>(
   ({ disabled, theme }) => ({
     height: theme.sizes.minElementHeight,
     borderRadius: theme.radii.default,
-    borderColor: theme.colors.fadedText10,
+    borderColor: theme.colors.borderColor,
     cursor: disabled ? "not-allowed" : "pointer",
     pointerEvents: disabled ? "none" : "auto",
     boxShadow: "none",
     lineHeight: theme.lineHeights.base,
+    gap: theme.spacing.md,
     "&:focus": {
       outline: "none",
     },
@@ -70,12 +94,11 @@ export const StyledColorBlock = styled.div<StyledColorBlockProps>(
     width: theme.sizes.minElementHeight,
     height: theme.sizes.minElementHeight,
     borderRadius: theme.radii.default,
-    borderColor: theme.colors.fadedText10,
+    borderColor: theme.colors.borderColor,
     borderWidth: theme.sizes.borderWidth,
     opacity: disabled ? "0.4" : "",
     backgroundColor,
     borderStyle: "solid",
-    padding: "2px 0.8rem",
     cursor: "pointer",
     lineHeight: theme.lineHeights.base,
     "&:focus": {
@@ -84,9 +107,7 @@ export const StyledColorBlock = styled.div<StyledColorBlockProps>(
   })
 )
 
-export const StyledColorValue = styled.div(() => ({
+export const StyledColorValue = styled.div({
   display: "flex",
   alignItems: "center",
-  padding: "0 0.8rem",
-  width: "95px",
-}))
+})

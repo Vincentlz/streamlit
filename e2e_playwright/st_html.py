@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 import streamlit as st
+
+# Construct test assets path relative to this script file to
+# allow its execution with different working directories.
+TEST_ASSETS_DIR = Path(__file__).parent / "test_assets"
 
 # Test that we can render HTML with in-line styles
 st.html(
@@ -58,3 +64,10 @@ st.html(
     """
 )
 st.write("After tag")
+
+# Test that we can load HTML files from str paths
+HTML_PATH = TEST_ASSETS_DIR / "test_div.html"
+st.html(str(HTML_PATH))
+
+# Test that we can load HTML files from Path objects
+st.html(HTML_PATH)

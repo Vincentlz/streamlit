@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
 
 from playwright.sync_api import Page, expect
 
+from e2e_playwright.shared.app_utils import check_top_level_class
+
 
 def test_balloons_are_present_on_page(app: Page):
-    expect(app.get_by_test_id("balloons")).to_have_count(1)
+    expect(app.get_by_test_id("stBalloons")).to_have_count(1)
+    check_top_level_class(app, "stBalloons")

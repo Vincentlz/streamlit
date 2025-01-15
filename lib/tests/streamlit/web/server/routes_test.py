@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import tempfile
 from unittest.mock import MagicMock
@@ -26,15 +27,18 @@ import tornado.websocket
 
 from streamlit.runtime.forward_msg_cache import ForwardMsgCache, populate_hash_if_needed
 from streamlit.runtime.runtime_util import serialize_forward_msg
+from streamlit.web.server import Server
 from streamlit.web.server.routes import _DEFAULT_ALLOWED_MESSAGE_ORIGINS
 from streamlit.web.server.server import (
     HEALTH_ENDPOINT,
     HOST_CONFIG_ENDPOINT,
     MESSAGE_ENDPOINT,
     NEW_HEALTH_ENDPOINT,
+    AddSlashHandler,
     HealthHandler,
     HostConfigHandler,
     MessageCacheHandler,
+    RemoveSlashHandler,
     StaticFileHandler,
 )
 from tests.streamlit.message_mocks import create_dataframe_msg
@@ -128,7 +132,19 @@ class StaticFileHandlerTest(tornado.testing.AsyncHTTPTestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self._tmpfile = tempfile.NamedTemporaryFile(dir=self._tmpdir.name, delete=False)
+        self._tmp_js_file = tempfile.NamedTemporaryFile(
+            dir=self._tmpdir.name, suffix="script.js", delete=False
+        )
+        self._tmp_html_file = tempfile.NamedTemporaryFile(
+            dir=self._tmpdir.name, suffix="file.html", delete=False
+        )
+        self._tmp_css_file = tempfile.NamedTemporaryFile(
+            dir=self._tmpdir.name, suffix="stylesheet.css", delete=False
+        )
         self._filename = os.path.basename(self._tmpfile.name)
+        self._js_filename = os.path.basename(self._tmp_js_file.name)
+        self._html_filename = os.path.basename(self._tmp_html_file.name)
+        self._css_filename = os.path.basename(self._tmp_css_file.name)
 
         super().setUp()
 
@@ -188,6 +204,79 @@ class StaticFileHandlerTest(tornado.testing.AsyncHTTPTestCase):
         for r in responses:
             assert r.code == 404
 
+    def test_mimetype_is_overridden_by_server(self):
+        """Test get_content_type function."""
+        mimetypes.add_type("custom/html", ".html")
+        mimetypes.add_type("custom/js", ".js")
+        mimetypes.add_type("custom/css", ".css")
+
+        r = self.fetch(f"/{self._html_filename}")
+        assert r.headers["Content-Type"] == "custom/html"
+
+        r = self.fetch(f"/{self._js_filename}")
+        assert r.headers["Content-Type"] == "custom/js"
+
+        r = self.fetch(f"/{self._css_filename}")
+        assert r.headers["Content-Type"] == "custom/css"
+
+        Server.initialize_mimetypes()
+
+        r = self.fetch(f"/{self._html_filename}")
+        assert r.headers["Content-Type"] == "text/html"
+
+        r = self.fetch(f"/{self._js_filename}")
+        assert r.headers["Content-Type"] == "application/javascript"
+
+        r = self.fetch(f"/{self._css_filename}")
+        assert r.headers["Content-Type"] == "text/css"
+
+
+class RemoveSlashHandlerTest(tornado.testing.AsyncHTTPTestCase):
+    def get_app(self):
+        return tornado.web.Application(
+            [
+                (
+                    r"^/(?!/)(.*)",
+                    RemoveSlashHandler,
+                )
+            ]
+        )
+
+    def test_parse_url_path_301(self):
+        paths = ["/page1/", "/page2/page3/"]
+        responses = [self.fetch(path, follow_redirects=False) for path in paths]
+
+        for idx, r in enumerate(responses):
+            assert r.code == 301
+            assert r.headers["Location"] == paths[idx].rstrip("/")
+
+    def test_parse_url_path_404(self):
+        paths = ["//page1/", "//page2/page3/"]
+        responses = [self.fetch(path, follow_redirects=False) for path in paths]
+
+        for r in responses:
+            assert r.code == 404
+
+
+class AddSlashHandlerTest(tornado.testing.AsyncHTTPTestCase):
+    def get_app(self):
+        return tornado.web.Application(
+            [
+                (
+                    r"/(.*)",
+                    AddSlashHandler,
+                )
+            ]
+        )
+
+    def test_parse_url_path_301(self):
+        paths = ["/page1"]
+        responses = [self.fetch(path, follow_redirects=False) for path in paths]
+
+        for idx, r in enumerate(responses):
+            assert r.code == 301
+            assert r.headers["Location"] == paths[idx] + "/"
+
 
 class HostConfigHandlerTest(tornado.testing.AsyncHTTPTestCase):
     def setUp(self):
@@ -215,6 +304,7 @@ class HostConfigHandlerTest(tornado.testing.AsyncHTTPTestCase):
                 # Default host configuration settings:
                 "enableCustomParentMessages": False,
                 "enforceDownloadInNewTab": False,
+                "metricsUrl": "",
             },
             response_body,
         )

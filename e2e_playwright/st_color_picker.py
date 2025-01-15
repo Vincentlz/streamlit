@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ def callback():
     st.write("Hello world")
 
 
-c1 = st.color_picker("Default Color", on_change=callback)
+c1 = st.color_picker("Default Color", on_change=callback, key="color_picker_1")
 st.write("Color 1", c1)
 
 c2 = st.color_picker("New Color", "#EB144C", help="help string")
@@ -53,6 +53,8 @@ def test_fragment():
 
 
 test_fragment()
+
+st.color_picker(":material/check: :rainbow[Fancy] _**markdown** `label` _support_")
 
 if "runs" not in st.session_state:
     st.session_state.runs = 0

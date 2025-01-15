@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -189,7 +189,7 @@ class QueryParamsProxy(MutableMapping[str, str]):
         .. note::
             ``.from_dict()`` is not a direct inverse of ``.to_dict()`` if
             you are working with repeated keys. A true inverse operation is
-            ``{key: st.query_params.get_all(key) for key st.query_params}``.
+            ``{key: st.query_params.get_all(key) for key in st.query_params}``.
 
         Parameters
         ----------

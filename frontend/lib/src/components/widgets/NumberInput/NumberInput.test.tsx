@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,8 @@
  */
 import React from "react"
 
-import "@testing-library/jest-dom"
-import { fireEvent, screen } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
+import { act, screen } from "@testing-library/react"
+import { userEvent } from "@testing-library/user-event"
 
 import {
   LabelVisibilityMessage as LabelVisibilityMessageProto,
@@ -47,8 +46,8 @@ const getProps = (elementProps: Partial<NumberInputProto> = {}): Props => ({
   disabled: false,
   theme: mockTheme.emotion,
   widgetMgr: new WidgetStateManager({
-    sendRerunBackMsg: jest.fn(),
-    formsDataChanged: jest.fn(),
+    sendRerunBackMsg: vi.fn(),
+    formsDataChanged: vi.fn(),
   }),
 })
 
@@ -78,26 +77,29 @@ describe("NumberInput widget", () => {
   it("renders without crashing", () => {
     const props = getIntProps()
     render(<NumberInput {...props} />)
-
-    expect(screen.getByTestId("stNumberInput")).toBeInTheDocument()
+    const numberInput = screen.getByTestId("stNumberInput")
+    expect(numberInput).toBeInTheDocument()
+    expect(numberInput).toHaveClass("stNumberInput")
   })
 
-  it("adds a focused class when running onFocus", () => {
+  it("adds a focused class when running onFocus", async () => {
+    const user = userEvent.setup()
     const props = getIntProps()
     render(<NumberInput {...props} />)
 
-    fireEvent.focus(screen.getByTestId("stNumberInput-Input"))
+    await user.click(screen.getByTestId("stNumberInputField"))
     expect(screen.getByTestId("stNumberInputContainer")).toHaveClass("focused")
   })
 
-  it("removes the focused class when running onBlur", () => {
+  it("removes the focused class when running onBlur", async () => {
+    const user = userEvent.setup()
     const props = getIntProps()
     render(<NumberInput {...props} />)
 
-    fireEvent.focus(screen.getByTestId("stNumberInput-Input"))
+    await user.click(screen.getByTestId("stNumberInputField"))
     expect(screen.getByTestId("stNumberInputContainer")).toHaveClass("focused")
 
-    fireEvent.blur(screen.getByTestId("stNumberInput-Input"))
+    await user.tab()
     expect(screen.getByTestId("stNumberInputContainer")).not.toHaveClass(
       "focused"
     )
@@ -112,16 +114,14 @@ describe("NumberInput widget", () => {
     render(<NumberInput {...props} />)
 
     expect(screen.getByTestId("stNumberInput")).toBeInTheDocument()
-    expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(5.0)
+    expect(screen.getByTestId("stNumberInputField")).toHaveValue(5.0)
   })
 
   it("shows a label", () => {
     const props = getIntProps()
     render(<NumberInput {...props} />)
 
-    expect(screen.getByTestId("stWidgetLabel")).toHaveTextContent(
-      props.element.label
-    )
+    expect(screen.getByText(props.element.label)).toBeVisible()
   })
 
   it("pass labelVisibility prop to StyledWidgetLabel correctly when hidden", () => {
@@ -151,10 +151,28 @@ describe("NumberInput widget", () => {
     const props = getIntProps()
     render(<NumberInput {...props} />)
 
-    const numberInput = screen.getByTestId("stNumberInput-Input")
+    const numberInput = screen.getByTestId("stNumberInputField")
 
     expect(numberInput).toHaveAttribute("min", "-Infinity")
     expect(numberInput).toHaveAttribute("max", "Infinity")
+  })
+
+  it("sets input mode to empty string", () => {
+    const props = getIntProps()
+    render(<NumberInput {...props} />)
+
+    const numberInput = screen.getByTestId("stNumberInputField")
+
+    expect(numberInput).toHaveAttribute("inputmode", "")
+  })
+
+  it("sets input type to number", () => {
+    const props = getIntProps()
+    render(<NumberInput {...props} />)
+
+    const numberInput = screen.getByTestId("stNumberInputField")
+
+    expect(numberInput).toHaveAttribute("type", "number")
   })
 
   it("sets min/max values", () => {
@@ -166,28 +184,29 @@ describe("NumberInput widget", () => {
       max: 10,
     })
     render(<NumberInput {...props} />)
-    const numberInput = screen.getByTestId("stNumberInput-Input")
+    const numberInput = screen.getByTestId("stNumberInputField")
 
     expect(numberInput).toHaveAttribute("min", "0")
     expect(numberInput).toHaveAttribute("max", "10")
   })
 
-  it("resets its value when form is cleared", () => {
+  it("resets its value when form is cleared", async () => {
+    const user = userEvent.setup()
     // Create a widget in a clearOnSubmit form
     const props = getIntProps({ formId: "form", default: 10 })
-    props.widgetMgr.setFormClearOnSubmit("form", true)
+    props.widgetMgr.setFormSubmitBehaviors("form", true)
 
-    jest.spyOn(props.widgetMgr, "setIntValue")
+    vi.spyOn(props.widgetMgr, "setIntValue")
     render(<NumberInput {...props} />)
 
-    const numberInput = screen.getByTestId("stNumberInput-Input")
-    // Change the widget value
-    fireEvent.change(numberInput, {
-      target: { value: 15 },
-    })
+    const numberInput = screen.getByTestId("stNumberInputField")
+    await user.clear(numberInput)
+    await user.type(numberInput, "15")
 
     // "Submit" the form
-    props.widgetMgr.submitForm("form", undefined)
+    act(() => {
+      props.widgetMgr.submitForm("form", undefined)
+    })
 
     // Our widget should be reset, and the widgetMgr should be updated
     expect(numberInput).toHaveValue(props.element.default)
@@ -201,8 +220,71 @@ describe("NumberInput widget", () => {
     )
   })
 
+  it("shows Input Instructions on dirty state when not in form (by default)", async () => {
+    const user = userEvent.setup()
+    const props = getIntProps()
+    render(<NumberInput {...props} />)
+    const numberInput = screen.getByTestId("stNumberInputField")
+
+    // userEvent necessary to trigger dirty state
+    await user.click(numberInput)
+    await user.keyboard("{backspace}5")
+
+    expect(screen.getByText("Press Enter to apply")).toBeVisible()
+  })
+
+  it("shows Input Instructions if in form that allows submit on enter", async () => {
+    const user = userEvent.setup()
+    const props = getIntProps({ formId: "form" })
+    vi.spyOn(props.widgetMgr, "allowFormEnterToSubmit").mockReturnValue(true)
+
+    render(<NumberInput {...props} />)
+    const numberInput = screen.getByTestId("stNumberInputField")
+
+    // userEvent necessary to trigger dirty state
+    await user.click(numberInput)
+    await user.keyboard("{backspace}5")
+
+    expect(screen.getByText("Press Enter to submit form")).toBeVisible()
+  })
+
+  it("shows Input Instructions if focused again and in form that allows submit on enter", async () => {
+    const user = userEvent.setup()
+    const props = getIntProps({ formId: "form" })
+    vi.spyOn(props.widgetMgr, "allowFormEnterToSubmit").mockReturnValue(true)
+
+    render(<NumberInput {...props} />)
+    const numberInput = screen.getByTestId("stNumberInputField")
+
+    // userEvent necessary to trigger dirty state
+    await user.click(numberInput)
+    await user.keyboard("{backspace}5")
+
+    await user.tab()
+    expect(screen.queryByTestId("InputInstructions")).not.toBeInTheDocument()
+
+    await user.click(numberInput)
+    expect(screen.getByText("Press Enter to submit form")).toBeVisible()
+  })
+
+  it("hides Input Instructions if in form that doesn't allow submit on enter", async () => {
+    const user = userEvent.setup()
+    const props = getIntProps({ formId: "form" })
+    vi.spyOn(props.widgetMgr, "allowFormEnterToSubmit").mockReturnValue(false)
+
+    render(<NumberInput {...props} />)
+    const numberInput = screen.getByTestId("stNumberInputField")
+
+    // userEvent necessary to trigger dirty state
+    await user.click(numberInput)
+    await user.keyboard("{backspace}5")
+
+    expect(screen.queryByTestId("InputInstructions")).toHaveTextContent("")
+  })
+
   describe("FloatData", () => {
-    it("changes state on ArrowDown", () => {
+    it("changes state on ArrowDown", async () => {
+      const user = userEvent.setup()
       const props = getFloatProps({
         format: "%0.2f",
         default: 11.0,
@@ -210,18 +292,16 @@ describe("NumberInput widget", () => {
       })
 
       render(<NumberInput {...props} />)
-      const numberInput = screen.getByTestId("stNumberInput-Input")
+      const numberInput = screen.getByTestId("stNumberInputField")
 
-      fireEvent.keyDown(numberInput, {
-        key: "ArrowDown",
-      })
+      await user.type(numberInput, "{arrowdown}")
 
       expect(numberInput).toHaveValue(10.9)
     })
 
     it("sets widget value on mount", () => {
       const props = getFloatProps()
-      jest.spyOn(props.widgetMgr, "setDoubleValue")
+      vi.spyOn(props.widgetMgr, "setDoubleValue")
 
       render(<NumberInput {...props} />)
 
@@ -235,25 +315,24 @@ describe("NumberInput widget", () => {
       )
     })
 
-    it("sets value on Enter", () => {
+    it("sets value on Enter", async () => {
+      const user = userEvent.setup()
       const props = getFloatProps({ default: 10 })
-      jest.spyOn(props.widgetMgr, "setDoubleValue")
+      vi.spyOn(props.widgetMgr, "setDoubleValue")
 
       render(<NumberInput {...props} />)
 
-      fireEvent.keyPress(screen.getByTestId("stNumberInput-Input"), {
-        key: "Enter",
-      })
+      await user.type(screen.getByTestId("stNumberInputField"), "{enter}")
 
       expect(props.widgetMgr.setDoubleValue).toHaveBeenCalled()
     })
 
     it("sets initialValue from widgetMgr", () => {
       const props = getFloatProps({ default: 10.0 })
-      props.widgetMgr.getDoubleValue = jest.fn(() => 15.0)
+      props.widgetMgr.getDoubleValue = vi.fn(() => 15.0)
       render(<NumberInput {...props} />)
 
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(15.0)
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(15.0)
     })
 
     describe("Formatting", () => {
@@ -265,7 +344,7 @@ describe("NumberInput widget", () => {
         render(<NumberInput {...props} />)
 
         expect(screen.getByTestId("stNumberInput")).toBeInTheDocument()
-        expect(screen.getByTestId("stNumberInput-Input")).toHaveDisplayValue(
+        expect(screen.getByTestId("stNumberInputField")).toHaveDisplayValue(
           "1.1111"
         )
       })
@@ -280,7 +359,7 @@ describe("NumberInput widget", () => {
       render(<NumberInput {...props} />)
 
       expect(screen.getByTestId("stNumberInput")).toBeInTheDocument()
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveDisplayValue("1")
+      expect(screen.getByTestId("stNumberInputField")).toHaveDisplayValue("1")
     })
 
     it("automatically sets formatting when none provided based on step", () => {
@@ -292,7 +371,7 @@ describe("NumberInput widget", () => {
       render(<NumberInput {...props} />)
 
       expect(screen.getByTestId("stNumberInput")).toBeInTheDocument()
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveDisplayValue(
+      expect(screen.getByTestId("stNumberInputField")).toHaveDisplayValue(
         "1.000"
       )
     })
@@ -307,7 +386,7 @@ describe("NumberInput widget", () => {
       render(<NumberInput {...props} />)
 
       expect(screen.getByTestId("stNumberInput")).toBeInTheDocument()
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveDisplayValue(
+      expect(screen.getByTestId("stNumberInputField")).toHaveDisplayValue(
         "1.00"
       )
     })
@@ -321,7 +400,7 @@ describe("NumberInput widget", () => {
       render(<NumberInput {...props} />)
 
       expect(screen.getByTestId("stNumberInput")).toBeInTheDocument()
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveDisplayValue("1")
+      expect(screen.getByTestId("stNumberInputField")).toHaveDisplayValue("1")
     })
   })
 
@@ -330,12 +409,12 @@ describe("NumberInput widget", () => {
       const props = getIntProps({ default: 10 })
       render(<NumberInput {...props} />)
 
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(10)
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(10)
     })
 
     it("sets widget value on mount", () => {
       const props = getIntProps()
-      jest.spyOn(props.widgetMgr, "setIntValue")
+      vi.spyOn(props.widgetMgr, "setIntValue")
 
       render(<NumberInput {...props} />)
 
@@ -353,44 +432,39 @@ describe("NumberInput widget", () => {
       const user = userEvent.setup()
       const props = getIntProps({ default: 10, max: 20 })
       render(<NumberInput {...props} />)
-      const numberInput = screen.getByTestId("stNumberInput-Input")
+      const numberInput = screen.getByTestId("stNumberInputField")
 
-      // userEvent necessary to trigger dirty state
       await user.click(numberInput)
       await user.keyboard("{backspace}{backspace}15")
 
       // Check that the value is updated & state dirty
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(15)
-      expect(screen.getByTestId("InputInstructions")).toHaveTextContent(
-        "Press Enter to apply"
-      )
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(15)
+      expect(screen.getByText("Press Enter to apply")).toBeVisible()
     })
 
-    it("sets value on Enter", () => {
+    it("sets value on Enter", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({ default: 10 })
-      jest.spyOn(props.widgetMgr, "setIntValue")
+      vi.spyOn(props.widgetMgr, "setIntValue")
 
       render(<NumberInput {...props} />)
 
-      fireEvent.keyPress(screen.getByTestId("stNumberInput-Input"), {
-        key: "Enter",
-      })
+      await user.type(screen.getByTestId("stNumberInputField"), "{enter}")
 
       expect(props.widgetMgr.setIntValue).toHaveBeenCalled()
     })
 
-    it("can pass fragmentId to setIntValue", () => {
+    it("can pass fragmentId to setIntValue", async () => {
+      const user = userEvent.setup()
       const props = {
         ...getIntProps({ default: 10 }),
         fragmentId: "myFragmentId",
       }
-      jest.spyOn(props.widgetMgr, "setIntValue")
+      vi.spyOn(props.widgetMgr, "setIntValue")
 
       render(<NumberInput {...props} />)
 
-      fireEvent.keyPress(screen.getByTestId("stNumberInput-Input"), {
-        key: "Enter",
-      })
+      await user.type(screen.getByTestId("stNumberInputField"), "{enter}")
 
       expect(props.widgetMgr.setIntValue).toHaveBeenCalledWith(
         expect.anything(),
@@ -402,51 +476,55 @@ describe("NumberInput widget", () => {
 
     it("sets initialValue from widgetMgr", () => {
       const props = getIntProps({ default: 10 })
-      props.widgetMgr.getIntValue = jest.fn(() => 15)
+      props.widgetMgr.getIntValue = vi.fn(() => 15)
 
       render(<NumberInput {...props} />)
 
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(15)
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(15)
     })
   })
 
   describe("Step", () => {
     describe("rapid interactions", () => {
-      it("handles stepUp button clicks correctly", () => {
+      it("handles stepUp button clicks correctly", async () => {
+        const user = userEvent.setup()
         const props = getIntProps({ default: 10, step: 1 })
         render(<NumberInput {...props} />)
 
-        const stepUpButton = screen.getByTestId("stNumberInput-StepUp")
+        const stepUpButton = screen.getByTestId("stNumberInputStepUp")
         for (let i = 0; i < 5; i++) {
-          fireEvent.click(stepUpButton)
+          await user.click(stepUpButton)
         }
-        expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(15)
+        expect(screen.getByTestId("stNumberInputField")).toHaveValue(15)
       })
 
-      it("handles stepDown button clicks correctly", () => {
+      it("handles stepDown button clicks correctly", async () => {
+        const user = userEvent.setup()
         const props = getIntProps({ default: 10, step: 1 })
         render(<NumberInput {...props} />)
 
-        const stepDownButton = screen.getByTestId("stNumberInput-StepDown")
+        const stepDownButton = screen.getByTestId("stNumberInputStepDown")
         for (let i = 0; i < 5; i++) {
-          fireEvent.click(stepDownButton)
+          await user.click(stepDownButton)
         }
-        expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(5)
+        expect(screen.getByTestId("stNumberInputField")).toHaveValue(5)
       })
     })
 
-    it("passes the step prop", () => {
+    it("passes the step prop", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({ default: 10, step: 1 })
       render(<NumberInput {...props} />)
 
       // Increment
-      fireEvent.click(screen.getByTestId("stNumberInput-StepUp"))
+      await user.click(screen.getByTestId("stNumberInputStepUp"))
 
       // Check step properly enforced
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(11)
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(11)
     })
 
-    it("changes state on ArrowUp", () => {
+    it("changes state on ArrowUp", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({
         format: "%d",
         default: 10,
@@ -454,14 +532,13 @@ describe("NumberInput widget", () => {
       })
       render(<NumberInput {...props} />)
 
-      const numberInput = screen.getByTestId("stNumberInput-Input")
-      fireEvent.keyDown(numberInput, {
-        key: "ArrowUp",
-      })
+      const numberInput = screen.getByTestId("stNumberInputField")
+      await user.type(numberInput, "{arrowup}")
       expect(numberInput).toHaveValue(11)
     })
 
-    it("changes state on ArrowDown", () => {
+    it("changes state on ArrowDown", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({
         format: "%d",
         default: 10,
@@ -469,14 +546,13 @@ describe("NumberInput widget", () => {
       })
       render(<NumberInput {...props} />)
 
-      const numberInput = screen.getByTestId("stNumberInput-Input")
-      fireEvent.keyDown(numberInput, {
-        key: "ArrowDown",
-      })
+      const numberInput = screen.getByTestId("stNumberInputField")
+      await user.type(numberInput, "{arrowdown}")
       expect(numberInput).toHaveValue(9)
     })
 
-    it("handles stepDown button clicks", () => {
+    it("handles stepDown button clicks", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({
         format: "%d",
         default: 10,
@@ -485,11 +561,12 @@ describe("NumberInput widget", () => {
       render(<NumberInput {...props} />)
 
       // Decrement
-      fireEvent.click(screen.getByTestId("stNumberInput-StepDown"))
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(9)
+      await user.click(screen.getByTestId("stNumberInputStepDown"))
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(9)
     })
 
-    it("handles stepUp button clicks", () => {
+    it("handles stepUp button clicks", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({
         format: "%d",
         default: 10,
@@ -498,33 +575,35 @@ describe("NumberInput widget", () => {
       render(<NumberInput {...props} />)
 
       // Increment
-      fireEvent.click(screen.getByTestId("stNumberInput-StepUp"))
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(11)
+      await user.click(screen.getByTestId("stNumberInputStepUp"))
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(11)
     })
 
-    it("disables stepDown button when at min", () => {
+    it("disables stepDown button when at min", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({ default: 1, step: 1, min: 0, hasMin: true })
       render(<NumberInput {...props} />)
 
-      const stepDownButton = screen.getByTestId("stNumberInput-StepDown")
+      const stepDownButton = screen.getByTestId("stNumberInputStepDown")
       expect(stepDownButton).not.toBeDisabled()
 
-      fireEvent.click(stepDownButton)
+      await user.click(stepDownButton)
 
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(0)
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(0)
       expect(stepDownButton).toBeDisabled()
     })
 
-    it("disables stepUp button when at max", () => {
+    it("disables stepUp button when at max", async () => {
+      const user = userEvent.setup()
       const props = getIntProps({ default: 1, step: 1, max: 2, hasMax: true })
       render(<NumberInput {...props} />)
 
-      const stepUpButton = screen.getByTestId("stNumberInput-StepUp")
+      const stepUpButton = screen.getByTestId("stNumberInputStepUp")
       expect(stepUpButton).not.toBeDisabled()
 
-      fireEvent.click(stepUpButton)
+      await user.click(stepUpButton)
 
-      expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(2)
+      expect(screen.getByTestId("stNumberInputField")).toHaveValue(2)
       expect(stepUpButton).toBeDisabled()
     })
 
@@ -533,10 +612,10 @@ describe("NumberInput widget", () => {
       render(<NumberInput {...props} width={100} />)
 
       expect(
-        screen.queryByTestId("stNumberInput-StepUp")
+        screen.queryByTestId("stNumberInputStepUp")
       ).not.toBeInTheDocument()
       expect(
-        screen.queryByTestId("stNumberInput-StepDown")
+        screen.queryByTestId("stNumberInputStepDown")
       ).not.toBeInTheDocument()
     })
 
@@ -544,15 +623,15 @@ describe("NumberInput widget", () => {
       const props = getIntProps({ default: 1, step: 1, max: 2, hasMax: true })
       render(<NumberInput {...props} width={185} />)
 
-      expect(screen.getByTestId("stNumberInput-StepUp")).toBeInTheDocument()
-      expect(screen.getByTestId("stNumberInput-StepDown")).toBeInTheDocument()
+      expect(screen.getByTestId("stNumberInputStepUp")).toBeInTheDocument()
+      expect(screen.getByTestId("stNumberInputStepDown")).toBeInTheDocument()
     })
 
     it("hides Please enter to apply text when width is smaller than 120px", async () => {
       const user = userEvent.setup()
       const props = getIntProps({ default: 1, step: 1, max: 20, hasMax: true })
       render(<NumberInput {...props} width={100} />)
-      const numberInput = screen.getByTestId("stNumberInput-Input")
+      const numberInput = screen.getByTestId("stNumberInputField")
 
       // userEvent necessary to trigger dirty state
       await user.click(numberInput)
@@ -565,30 +644,29 @@ describe("NumberInput widget", () => {
       const user = userEvent.setup()
       const props = getIntProps({ default: 1, step: 1, max: 20, hasMax: true })
       render(<NumberInput {...props} width={185} />)
-      const numberInput = screen.getByTestId("stNumberInput-Input")
+      const numberInput = screen.getByTestId("stNumberInputField")
 
       // userEvent necessary to trigger dirty state
       await user.click(numberInput)
       await user.keyboard("20")
 
-      expect(screen.getByTestId("InputInstructions")).toHaveTextContent(
-        "Press Enter to apply"
-      )
+      expect(screen.getByText("Press Enter to apply")).toBeVisible()
     })
   })
 
   it("focuses input when clicking label", async () => {
+    const user = userEvent.setup()
     const props = getProps()
     render(<NumberInput {...props} />)
-    const numberInput = screen.getByTestId("stNumberInput-Input")
+    const numberInput = screen.getByTestId("stNumberInputField")
     expect(numberInput).not.toHaveFocus()
     const label = screen.getByText(props.element.label)
-    const user = userEvent.setup()
     await user.click(label)
     expect(numberInput).toHaveFocus()
   })
 
-  it("ensures id doesn't change on rerender", () => {
+  it("ensures id doesn't change on rerender", async () => {
+    const user = userEvent.setup()
     const props = getProps()
     render(<NumberInput {...props} />)
 
@@ -596,12 +674,11 @@ describe("NumberInput widget", () => {
     const forId1 = numberInputLabel1.getAttribute("for")
 
     // Make some change to cause a rerender
-    const numberInput = screen.getByTestId("stNumberInput-Input")
+    const numberInput = screen.getByTestId("stNumberInputField")
     // Change the widget value
-    fireEvent.change(numberInput, {
-      target: { value: 15 },
-    })
-    expect(screen.getByTestId("stNumberInput-Input")).toHaveValue(15)
+    await user.clear(numberInput)
+    await user.type(numberInput, "15")
+    expect(screen.getByTestId("stNumberInputField")).toHaveValue(15)
 
     const numberInputLabel2 = screen.getByTestId("stWidgetLabel")
     const forId2 = numberInputLabel2.getAttribute("for")

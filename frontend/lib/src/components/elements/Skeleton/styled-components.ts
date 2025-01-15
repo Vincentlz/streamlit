@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ export const StyledSkeleton = styled.div(({ theme }) => ({
 
 export const TitleSkeleton = styled.div(({ theme }) => ({
   height: theme.fontSizes.fourXL,
-  width: "17rem", // Picked because it looks good.
+  width: `calc(${theme.sizes.contentMaxWidth} * 0.37)`, // Picked because it looks good.
   maxWidth: "75%", // Picked because it looks good.
   background:
     theme.colors.skeletonBackgroundColor || theme.colors.darkenedBgMix15,

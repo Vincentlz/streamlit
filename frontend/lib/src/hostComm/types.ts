@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-import { IAppPage, ICustomThemeConfig } from "@streamlit/lib/src/proto"
+import {
+  IAppPage,
+  ICustomThemeConfig,
+  MetricsEvent,
+} from "@streamlit/lib/src/proto"
 import { ExportedTheme } from "@streamlit/lib/src/theme"
 import { ScriptRunState } from "@streamlit/lib/src/ScriptRunState"
 import { LibConfig } from "@streamlit/lib/src/components/core/LibContext"
@@ -64,8 +68,6 @@ export type IHostToGuestMessage = {
   | {
       type: "SET_AUTH_TOKEN"
       authToken: string
-      jwtHeaderName?: string
-      jwtHeaderValue?: string
     }
   | {
       type: "SET_IS_OWNER"
@@ -132,6 +134,8 @@ export type IHostToGuestMessage = {
 export type IGuestToHostMessage =
   | {
       type: "GUEST_READY"
+      streamlitExecutionStartedAt: number
+      guestReadyAt: number
     }
   | {
       type: "MENU_ITEM_CALLBACK"
@@ -175,6 +179,10 @@ export type IGuestToHostMessage =
       scriptRunState: ScriptRunState
     }
   | {
+      type: "REDIRECT_TO_URL"
+      url: string
+    }
+  | {
       type: "CUSTOM_PARENT_MESSAGE"
       message: string
     }
@@ -187,6 +195,11 @@ export type IGuestToHostMessage =
     }
   | {
       type: "WEBSOCKET_CONNECTED"
+    }
+  | {
+      type: "METRICS_EVENT"
+      eventName: string
+      data: MetricsEvent
     }
 
 export type VersionedMessage<Message> = {
@@ -221,9 +234,19 @@ export type AppConfig = {
   enableCustomParentMessages?: boolean
 }
 
+export type MetricsConfig = {
+  /**
+   * URL to send metrics data to via POST request.
+   * Setting to "postMessage" sends metrics events via postMessage to host.
+   * Setting to "off" disables metrics collection.
+   * If undefined, metricsUrl requested from centralized config file.
+   */
+  metricsUrl?: string | "postMessage" | "off"
+}
+
 /**
  * The response structure of the `_stcore/host-config` endpoint.
  * This combines streamlit-lib specific configuration options with
  * streamlit-app specific options (e.g. allowed message origins).
  */
-export type IHostConfigResponse = LibConfig & AppConfig
+export type IHostConfigResponse = LibConfig & AppConfig & MetricsConfig

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
-import { Field, Utf8, vectorFromArray } from "apache-arrow"
+import { Field, Utf8 } from "apache-arrow"
 import cloneDeep from "lodash/cloneDeep"
 
-import { IndexTypeName, Quiver } from "@streamlit/lib/src/dataframes/Quiver"
+import { Quiver } from "@streamlit/lib/src/dataframes/Quiver"
 import {
   CATEGORICAL,
   CATEGORICAL_COLUMN,
-  CATEGORICAL_INTERVAL,
   DATE,
-  DECIMAL,
-  DICTIONARY,
   DIFFERENT_COLUMN_TYPES,
   DISPLAY_VALUES,
   EMPTY,
@@ -37,13 +34,14 @@ import {
   INTERVAL_UINT64,
   MULTI,
   NAMED_INDEX,
-  PERIOD,
   RANGE,
   STYLER,
-  TIMEDELTA,
   UINT64,
   UNICODE,
 } from "@streamlit/lib/src/mocks/arrow"
+import { arrayFromVector } from "@streamlit/lib/src/test_util"
+
+import { getStyledCell } from "./pandasStylerUtils"
 
 describe("Quiver", () => {
   describe("Public methods", () => {
@@ -52,25 +50,25 @@ describe("Quiver", () => {
       const q = new Quiver(mockElement)
 
       test("cssId", () => {
-        expect(q.cssId).toBeUndefined()
+        expect(q.styler?.cssId).toBeUndefined()
       })
 
       test("cssStyles", () => {
-        expect(q.cssStyles).toBeUndefined()
+        expect(q.styler?.cssStyles).toBeUndefined()
       })
 
       test("caption", () => {
-        expect(q.caption).toBeUndefined()
+        expect(q.styler?.caption).toBeUndefined()
       })
 
       test("dimensions", () => {
         expect(q.dimensions).toStrictEqual({
-          headerRows: 1,
-          headerColumns: 1,
-          dataRows: 2,
-          dataColumns: 2,
-          rows: 3,
-          columns: 3,
+          numHeaderRows: 1,
+          numIndexColumns: 1,
+          numDataRows: 2,
+          numDataColumns: 2,
+          numRows: 3,
+          numColumns: 3,
         })
       })
 
@@ -94,15 +92,15 @@ describe("Quiver", () => {
       const q = new Quiver(mockElement)
 
       test("cssId", () => {
-        expect(q.cssId).toEqual("T_FAKE_UUID")
+        expect(q.styler?.cssId).toEqual("T_FAKE_UUID")
       })
 
       test("cssStyles", () => {
-        expect(q.cssStyles).toEqual("FAKE_CSS")
+        expect(q.styler?.cssStyles).toEqual("FAKE_CSS")
       })
 
       test("caption", () => {
-        expect(q.caption).toEqual("FAKE_CAPTION")
+        expect(q.styler?.caption).toEqual("FAKE_CAPTION")
       })
 
       describe("getCategoricalOptions", () => {
@@ -122,12 +120,12 @@ describe("Quiver", () => {
 
       test("dimensions", () => {
         expect(q.dimensions).toStrictEqual({
-          headerRows: 1,
-          headerColumns: 1,
-          dataRows: 2,
-          dataColumns: 2,
-          rows: 3,
-          columns: 3,
+          numHeaderRows: 1,
+          numIndexColumns: 1,
+          numDataRows: 2,
+          numDataColumns: 2,
+          numRows: 3,
+          numColumns: 3,
         })
       })
     })
@@ -136,46 +134,22 @@ describe("Quiver", () => {
       const mockElement = { data: UNICODE }
       const q = new Quiver(mockElement)
 
-      test("blank cell", () => {
-        expect(q.getCell(0, 0)).toStrictEqual({
-          type: "blank",
-          cssClass: "blank",
-          content: "",
-        })
-      })
-
       test("index cell", () => {
-        expect(q.getCell(1, 0)).toStrictEqual({
+        expect(q.getCell(0, 0)).toStrictEqual({
           type: "index",
-          cssClass: "row_heading level0 row0",
-          cssId: undefined,
           content: "i1",
           field: new Field("__index_level_0__", new Utf8(), true, new Map([])),
           contentType: {
-            pandas_type: IndexTypeName.UnicodeIndex,
+            pandas_type: "unicode",
             numpy_type: "object",
             meta: null,
           },
         })
       })
 
-      test("columns cell", () => {
-        expect(q.getCell(0, 1)).toStrictEqual({
-          type: "columns",
-          cssClass: "col_heading level0 col0",
-          content: "c1",
-          contentType: {
-            pandas_type: "unicode",
-            numpy_type: "object",
-          },
-        })
-      })
-
       test("data cell", () => {
-        expect(q.getCell(1, 2)).toStrictEqual({
+        expect(q.getCell(0, 2)).toStrictEqual({
           type: "data",
-          cssClass: "data row0 col1",
-          cssId: undefined,
           content: "1",
           contentType: {
             pandas_type: "unicode",
@@ -183,7 +157,6 @@ describe("Quiver", () => {
             meta: null,
           },
           field: new Field("c2", new Utf8(), true, new Map([])),
-          displayContent: undefined,
         })
       })
 
@@ -197,465 +170,6 @@ describe("Quiver", () => {
         )
       })
     })
-
-    describe("getTypeName", () => {
-      describe("uses numpy_type", () => {
-        test("period", () => {
-          const mockElement = { data: PERIOD }
-          const q = new Quiver(mockElement)
-          const dataType = q.types.data[0]
-
-          expect(Quiver.getTypeName(dataType)).toEqual("period[Y-DEC]")
-        })
-
-        test("decimal", () => {
-          const mockElement = { data: DECIMAL }
-          const q = new Quiver(mockElement)
-          const firstColumnType = q.types.data[0]
-
-          expect(Quiver.getTypeName(firstColumnType)).toEqual("decimal")
-        })
-
-        test("timedelta", () => {
-          const mockElement = { data: TIMEDELTA }
-          const q = new Quiver(mockElement)
-          const firstColumnType = q.types.data[0]
-
-          expect(Quiver.getTypeName(firstColumnType)).toEqual(
-            "timedelta64[ns]"
-          )
-        })
-
-        test("dictionary", () => {
-          const mockElement = { data: DICTIONARY }
-          const q = new Quiver(mockElement)
-          const firstColumnType = q.types.data[0]
-
-          expect(Quiver.getTypeName(firstColumnType)).toEqual("object")
-        })
-
-        test("interval datetime64[ns]", () => {
-          const mockElement = { data: INTERVAL_DATETIME64 }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            "interval[datetime64[ns], right]"
-          )
-        })
-
-        test("interval float64", () => {
-          const mockElement = { data: INTERVAL_FLOAT64 }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            "interval[float64, right]"
-          )
-        })
-
-        test("interval int64", () => {
-          const mockElement = { data: INTERVAL_INT64 }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            "interval[int64, right]"
-          )
-        })
-
-        test("interval uint64", () => {
-          const mockElement = { data: INTERVAL_UINT64 }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            "interval[uint64, right]"
-          )
-        })
-      })
-
-      describe("uses pandas_type", () => {
-        test("categorical", () => {
-          const mockElement = { data: CATEGORICAL }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            IndexTypeName.CategoricalIndex
-          )
-        })
-
-        test("date", () => {
-          const mockElement = { data: DATE }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            IndexTypeName.DatetimeIndex
-          )
-        })
-
-        test("float64", () => {
-          const mockElement = { data: FLOAT64 }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            IndexTypeName.Float64Index
-          )
-        })
-
-        test("int64", () => {
-          const mockElement = { data: INT64 }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            IndexTypeName.Int64Index
-          )
-        })
-
-        test("range", () => {
-          const mockElement = { data: RANGE }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            IndexTypeName.RangeIndex
-          )
-        })
-
-        test("uint64", () => {
-          const mockElement = { data: UINT64 }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            IndexTypeName.UInt64Index
-          )
-        })
-
-        test("unicode", () => {
-          const mockElement = { data: UNICODE }
-          const q = new Quiver(mockElement)
-          const indexType = q.types.index[0]
-
-          expect(Quiver.getTypeName(indexType)).toEqual(
-            IndexTypeName.UnicodeIndex
-          )
-        })
-      })
-    })
-
-    describe("format", () => {
-      test("null", () => {
-        expect(Quiver.format(null)).toEqual("<NA>")
-      })
-
-      test("string", () => {
-        expect(Quiver.format("foo")).toEqual("foo")
-      })
-
-      test("boolean", () => {
-        expect(Quiver.format(true)).toEqual("true")
-      })
-
-      test("float64", () => {
-        expect(
-          Quiver.format(1.25, {
-            pandas_type: "float64",
-            numpy_type: "float64",
-          })
-        ).toEqual("1.2500")
-      })
-
-      test("int64", () => {
-        const mockElement = { data: INT64 }
-        const q = new Quiver(mockElement)
-        const { content } = q.getCell(1, 2)
-
-        expect(
-          Quiver.format(content, {
-            pandas_type: "int64",
-            numpy_type: "int64",
-          })
-        ).toEqual("1")
-      })
-
-      test("uint64", () => {
-        const mockElement = { data: UINT64 }
-        const q = new Quiver(mockElement)
-        const { content } = q.getCell(1, 2)
-
-        expect(
-          Quiver.format(content, {
-            pandas_type: "uint64",
-            numpy_type: "uint64",
-          })
-        ).toEqual("2")
-      })
-
-      test("bytes", () => {
-        expect(
-          Quiver.format(new Uint8Array([1, 2, 3]), {
-            pandas_type: "bytes",
-            numpy_type: "bytes",
-          })
-        ).toEqual("1,2,3")
-      })
-
-      test("date", () => {
-        expect(
-          Quiver.format(new Date(Date.UTC(1970, 0, 1)), {
-            pandas_type: "date",
-            numpy_type: "object",
-          })
-        ).toEqual("1970-01-01")
-      })
-
-      test("datetime", () => {
-        expect(
-          Quiver.format(0, {
-            pandas_type: "datetime",
-            numpy_type: "datetime64[ns]",
-          })
-        ).toEqual("1970-01-01 00:00:00")
-      })
-
-      test("datetimetz", () => {
-        expect(
-          Quiver.format(0, {
-            pandas_type: "datetimetz",
-            numpy_type: "datetime64[ns]",
-            meta: { timezone: "Europe/Moscow" },
-          })
-        ).toEqual("1970-01-01 03:00:00+03:00")
-      })
-
-      test("datetimetz with offset", () => {
-        expect(
-          Quiver.format(0, {
-            pandas_type: "datetimetz",
-            numpy_type: "datetime64[ns]",
-            meta: { timezone: "+01:00" },
-          })
-        ).toEqual("1970-01-01 01:00:00+01:00")
-      })
-
-      test("interval datetime64[ns]", () => {
-        const mockElement = { data: INTERVAL_DATETIME64 }
-        const q = new Quiver(mockElement)
-        const { content } = q.getCell(1, 0)
-
-        expect(
-          Quiver.format(content, {
-            pandas_type: "object",
-            numpy_type: "interval[datetime64[ns], right]",
-          })
-        ).toEqual("(2017-01-01 00:00:00, 2017-01-02 00:00:00]")
-      })
-
-      test("interval float64", () => {
-        const mockElement = { data: INTERVAL_FLOAT64 }
-        const q = new Quiver(mockElement)
-        const { content } = q.getCell(1, 0)
-
-        expect(
-          Quiver.format(content, {
-            pandas_type: "object",
-            numpy_type: "interval[float64, right]",
-          })
-        ).toEqual("(0.0000, 1.5000]")
-      })
-
-      test("interval int64", () => {
-        const mockElement = { data: INTERVAL_INT64 }
-        const q = new Quiver(mockElement)
-        const { content } = q.getCell(1, 0)
-
-        expect(
-          Quiver.format(content, {
-            pandas_type: "object",
-            numpy_type: "interval[int64, right]",
-          })
-        ).toEqual("(0, 1]")
-      })
-
-      test("interval uint64", () => {
-        const mockElement = { data: INTERVAL_UINT64 }
-        const q = new Quiver(mockElement)
-        const { content } = q.getCell(1, 0)
-
-        expect(
-          Quiver.format(content, {
-            pandas_type: "object",
-            numpy_type: "interval[uint64, right]",
-          })
-        ).toEqual("(0, 1]")
-      })
-
-      test("decimal", () => {
-        const mockElement = { data: DECIMAL }
-        const q = new Quiver(mockElement)
-        const cell1 = q.getCell(1, 1)
-        expect(
-          Quiver.format(cell1.content, cell1.contentType, cell1.field)
-        ).toEqual("1.1")
-
-        const cell2 = q.getCell(2, 1)
-        expect(
-          Quiver.format(cell2.content, cell2.contentType, cell2.field)
-        ).toEqual("10000")
-
-        const cell3 = q.getCell(1, 2)
-        expect(
-          Quiver.format(cell3.content, cell3.contentType, cell3.field)
-        ).toEqual("2.23")
-
-        const cell4 = q.getCell(2, 2)
-        expect(
-          Quiver.format(cell4.content, cell4.contentType, cell4.field)
-        ).toEqual("-0.1")
-      })
-
-      test("timedelta", () => {
-        const mockElement = { data: TIMEDELTA }
-        const q = new Quiver(mockElement)
-        const cell1 = q.getCell(1, 1)
-        expect(
-          Quiver.format(cell1.content, cell1.contentType, cell1.field)
-        ).toEqual("a few seconds")
-
-        const cell2 = q.getCell(2, 1)
-        expect(
-          Quiver.format(cell2.content, cell2.contentType, cell2.field)
-        ).toEqual("4 hours")
-
-        const cell3 = q.getCell(1, 2)
-        expect(
-          Quiver.format(cell3.content, cell3.contentType, cell3.field)
-        ).toEqual("20 days")
-
-        const cell4 = q.getCell(2, 2)
-        expect(
-          Quiver.format(cell4.content, cell4.contentType, cell4.field)
-        ).toEqual("2 hours")
-      })
-
-      test("dictionary", () => {
-        const mockElement = { data: DICTIONARY }
-        const q = new Quiver(mockElement)
-        const { content, contentType, field } = q.getCell(1, 1)
-        expect(Quiver.format(content, contentType, field)).toEqual(
-          `{"a":1,"b":2}`
-        )
-      })
-
-      test("categorical interval", () => {
-        const mockElement = { data: CATEGORICAL_INTERVAL }
-        const q = new Quiver(mockElement)
-        const { content, contentType, field } = q.getCell(1, 1)
-
-        expect(Quiver.format(content, contentType, field)).toEqual(
-          "(23.535, 256.5]"
-        )
-      })
-
-      test("period", () => {
-        const mockElement = { data: PERIOD }
-        const q = new Quiver(mockElement)
-        const { rows, columns } = q.dimensions
-        const table: Record<string, string[]> = {}
-        for (let columnIndex = 1; columnIndex < columns; columnIndex++) {
-          const column = []
-          for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
-            const { content, contentType, field } = q.getCell(
-              rowIndex,
-              columnIndex
-            )
-            const cellValue = Quiver.format(content, contentType, field)
-            column.push(cellValue)
-          }
-          table[column[0]] = [column[1], column[2]]
-        }
-
-        expect(table).toEqual({
-          A: ["2012", "1970"],
-          M: ["2012-02", "1970-01"],
-          Y: ["2012", "1970"],
-          h: ["2012-02-14 00:00", "1970-01-01 00:00"],
-          min: ["2012-02-14 00:00", "1970-01-01 00:00"],
-          ms: ["2012-02-14 00:00:00.000", "1970-01-01 00:00:00.000"],
-          s: ["2012-02-14 00:00:00", "1970-01-01 00:00:00"],
-          L: ["2012-02-14 00:00:00.000", "1970-01-01 00:00:00.000"],
-          S: ["2012-02-14 00:00:00", "1970-01-01 00:00:00"],
-          T: ["2012-02-14 00:00", "1970-01-01 00:00"],
-          H: ["2012-02-14 00:00", "1970-01-01 00:00"],
-          D: ["2012-02-14", "1970-01-01"],
-          W: ["2012-02-13/2012-02-19", "1969-12-29/1970-01-04"],
-          "W-SUN": ["2012-02-13/2012-02-19", "1969-12-29/1970-01-04"],
-          "W-MON": ["2012-02-14/2012-02-20", "1969-12-30/1970-01-05"],
-          "W-TUE": ["2012-02-08/2012-02-14", "1969-12-31/1970-01-06"],
-          "W-WED": ["2012-02-09/2012-02-15", "1970-01-01/1970-01-07"],
-          "W-THU": ["2012-02-10/2012-02-16", "1969-12-26/1970-01-01"],
-          "W-FRI": ["2012-02-11/2012-02-17", "1969-12-27/1970-01-02"],
-          "W-SAT": ["2012-02-12/2012-02-18", "1969-12-28/1970-01-03"],
-          Q: ["2012Q1", "1970Q1"],
-          "Q-JAN": ["2013Q1", "1970Q4"],
-          "Q-FEB": ["2012Q4", "1970Q4"],
-          "Q-MAR": ["2012Q4", "1970Q4"],
-          "Q-APR": ["2012Q4", "1970Q3"],
-          "Q-MAY": ["2012Q3", "1970Q3"],
-          "Q-JUN": ["2012Q3", "1970Q3"],
-          "Q-JUL": ["2012Q3", "1970Q2"],
-          "Q-AUG": ["2012Q2", "1970Q2"],
-          "Q-SEP": ["2012Q2", "1970Q2"],
-          "Q-OCT": ["2012Q2", "1970Q1"],
-          "Q-NOV": ["2012Q1", "1970Q1"],
-          "Q-DEC": ["2012Q1", "1970Q1"],
-        })
-      })
-
-      test("invalid interval type", () => {
-        const mockElement = { data: INTERVAL_INT64 }
-        const INVALID_TYPE = "interval"
-        const q = new Quiver(mockElement)
-        const { content } = q.getCell(1, 0)
-
-        expect(() =>
-          Quiver.format(content, {
-            pandas_type: "object",
-            numpy_type: INVALID_TYPE,
-          })
-        ).toThrow("Invalid interval type: interval")
-      })
-
-      test("list[unicode]", () => {
-        expect(
-          Quiver.format(vectorFromArray(["foo", "bar", "baz"]), {
-            pandas_type: "list[unicode]",
-            numpy_type: "object",
-          })
-        ).toEqual('["foo","bar","baz"]')
-      })
-    })
-
-    describe("isEmpty", () => {
-      it("returns true if a DataFrame is empty", () => {
-        const mockElement = { data: EMPTY }
-        const q = new Quiver(mockElement)
-
-        expect(q.isEmpty()).toBe(true)
-      })
-
-      it("returns false if a DataFrame is not empty", () => {
-        const mockElement = { data: UNICODE }
-        const q = new Quiver(mockElement)
-
-        expect(q.isEmpty()).toBe(false)
-      })
-    })
   })
 
   describe("Display", () => {
@@ -664,16 +178,16 @@ describe("Quiver", () => {
         const mockElement = { data: CATEGORICAL }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([vectorFromArray(["i1", "i2"])])
-        expect(q.columns).toEqual([["c1", "c2"]])
+        expect(arrayFromVector(q.indexData)).toEqual([["i1", "i2"]])
+        expect(q.columnNames).toEqual([["c1", "c2"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.CategoricalIndex,
+              pandas_type: "categorical",
               numpy_type: "int8",
               meta: {
                 num_categories: 3,
@@ -700,10 +214,10 @@ describe("Quiver", () => {
         const mockElement = { data: DATE }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([
-          vectorFromArray([978220800000, 1009756800000]),
+        expect(arrayFromVector(q.indexData)).toEqual([
+          [978220800000, 1009756800000],
         ])
-        expect(q.columns).toEqual([
+        expect(q.columnNames).toEqual([
           ["2000-12-31 00:00:00", "2001-12-31 00:00:00"],
         ])
 
@@ -717,10 +231,10 @@ describe("Quiver", () => {
             new Date("2020-10-20T00:00:00.000Z").getTime(),
           ],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.DatetimeIndex,
+              pandas_type: "datetime",
               numpy_type: "datetime64[ns]",
               meta: null,
             },
@@ -744,17 +258,17 @@ describe("Quiver", () => {
         const mockElement = { data: FLOAT64 }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([vectorFromArray([1.24, 2.35])])
-        expect(q.columns).toEqual([["1.24", "2.35"]])
+        expect(arrayFromVector(q.indexData)).toEqual([[1.24, 2.35]])
+        expect(q.columnNames).toEqual([["1.24", "2.35"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           [1.2, 1.3],
           [1.4, 1.5],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.Float64Index,
-              numpy_type: IndexTypeName.Float64Index,
+              pandas_type: "float64",
+              numpy_type: "float64",
               meta: null,
             },
           ],
@@ -777,17 +291,17 @@ describe("Quiver", () => {
         const mockElement = { data: INT64 }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([vectorFromArray([BigInt(1), BigInt(2)])])
-        expect(q.columns).toEqual([["1", "2"]])
+        expect(arrayFromVector(q.indexData)).toEqual([[BigInt(1), BigInt(2)]])
+        expect(q.columnNames).toEqual([["1", "2"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           [BigInt(0), BigInt(1)],
           [BigInt(2), BigInt(3)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.Int64Index,
-              numpy_type: IndexTypeName.Int64Index,
+              pandas_type: "int64",
+              numpy_type: "int64",
               meta: null,
             },
           ],
@@ -810,17 +324,17 @@ describe("Quiver", () => {
         const mockElement = { data: INTERVAL_DATETIME64 }
         const q = new Quiver(mockElement)
 
-        expect(q.index.toString()).toEqual(
+        expect(q.indexData.toString()).toEqual(
           '[{"left": 1483228800000, "right": 1483315200000},{"left": 1483315200000, "right": 1483401600000}]'
         )
-        expect(q.columns).toEqual([
+        expect(q.columnNames).toEqual([
           ["(2017-01-01, 2017-01-02]", "(2017-01-02, 2017-01-03]"],
         ])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -847,15 +361,15 @@ describe("Quiver", () => {
         const mockElement = { data: INTERVAL_FLOAT64 }
         const q = new Quiver(mockElement)
 
-        expect(q.index.toString()).toEqual(
+        expect(q.indexData.toString()).toEqual(
           '[{"left": 0, "right": 1.5},{"left": 1.5, "right": 3}]'
         )
-        expect(q.columns).toEqual([["(0.0, 1.5]", "(1.5, 3.0]"]])
+        expect(q.columnNames).toEqual([["(0.0, 1.5]", "(1.5, 3.0]"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -882,15 +396,15 @@ describe("Quiver", () => {
         const mockElement = { data: INTERVAL_INT64 }
         const q = new Quiver(mockElement)
 
-        expect(q.index.toString()).toEqual(
+        expect(q.indexData.toString()).toEqual(
           '[{"left": 0, "right": 1},{"left": 1, "right": 2}]'
         )
-        expect(q.columns).toEqual([["(0, 1]", "(1, 2]"]])
+        expect(q.columnNames).toEqual([["(0, 1]", "(1, 2]"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -917,15 +431,15 @@ describe("Quiver", () => {
         const mockElement = { data: INTERVAL_UINT64 }
         const q = new Quiver(mockElement)
 
-        expect(q.index.toString()).toEqual(
+        expect(q.indexData.toString()).toEqual(
           '[{"left": 0, "right": 1},{"left": 1, "right": 2}]'
         )
-        expect(q.columns).toEqual([["(0, 1]", "(1, 2]"]])
+        expect(q.columnNames).toEqual([["(0, 1]", "(1, 2]"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -952,17 +466,17 @@ describe("Quiver", () => {
         const mockElement = { data: RANGE }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([[0, 1]])
-        expect(q.columns).toEqual([["0", "1"]])
+        expect(arrayFromVector(q.indexData)).toEqual([[0, 1]])
+        expect(q.columnNames).toEqual([["0", "1"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", "1"],
           ["bar", "2"],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.RangeIndex,
-              numpy_type: IndexTypeName.RangeIndex,
+              pandas_type: "range",
+              numpy_type: "range",
               meta: {
                 start: 0,
                 step: 1,
@@ -991,17 +505,17 @@ describe("Quiver", () => {
         const mockElement = { data: UINT64 }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([vectorFromArray([BigInt(1), BigInt(2)])])
-        expect(q.columns).toEqual([["1", "2"]])
+        expect(arrayFromVector(q.indexData)).toEqual([[BigInt(1), BigInt(2)]])
+        expect(q.columnNames).toEqual([["1", "2"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           [BigInt(1), BigInt(2)],
           [BigInt(3), BigInt(4)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.UInt64Index,
-              numpy_type: IndexTypeName.UInt64Index,
+              pandas_type: "uint64",
+              numpy_type: "uint64",
               meta: null,
             },
           ],
@@ -1024,16 +538,16 @@ describe("Quiver", () => {
         const mockElement = { data: UNICODE }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([vectorFromArray(["i1", "i2"])])
-        expect(q.columns).toEqual([["c1", "c2"]])
+        expect(arrayFromVector(q.indexData)).toEqual([["i1", "i2"]])
+        expect(q.columnNames).toEqual([["c1", "c2"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", "1"],
           ["bar", "2"],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.UnicodeIndex,
+              pandas_type: "unicode",
               numpy_type: "object",
               meta: null,
             },
@@ -1060,18 +574,18 @@ describe("Quiver", () => {
         const q = new Quiver(mockElement)
 
         expect(q.dimensions).toStrictEqual({
-          headerRows: 1,
-          headerColumns: 1,
-          dataRows: 0,
-          dataColumns: 0,
-          rows: 1,
-          columns: 1,
+          numHeaderRows: 1,
+          numIndexColumns: 1,
+          numDataRows: 0,
+          numDataColumns: 0,
+          numRows: 1,
+          numColumns: 1,
         })
 
-        expect(q.index).toEqual([])
-        expect(q.columns).toEqual([])
+        expect(arrayFromVector(q.indexData)).toEqual([])
+        expect(q.columnNames).toEqual([])
         expect(q.data.toArray()).toEqual([])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [{ pandas_type: "empty", numpy_type: "object", meta: null }],
           data: [],
         })
@@ -1081,11 +595,11 @@ describe("Quiver", () => {
         const mockElement = { data: MULTI }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([
-          vectorFromArray([BigInt(1), BigInt(2)]),
-          vectorFromArray(["red", "blue"]),
+        expect(arrayFromVector(q.indexData)).toEqual([
+          [BigInt(1), BigInt(2)],
+          ["red", "blue"],
         ])
-        expect(q.columns).toEqual([
+        expect(q.columnNames).toEqual([
           ["1", "2"],
           ["red", "blue"],
         ])
@@ -1093,15 +607,15 @@ describe("Quiver", () => {
           ["foo", "1"],
           ["bar", "2"],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.Int64Index,
+              pandas_type: "int64",
               numpy_type: "int64",
               meta: null,
             },
             {
-              pandas_type: IndexTypeName.UnicodeIndex,
+              pandas_type: "unicode",
               numpy_type: "object",
               meta: null,
             },
@@ -1133,17 +647,17 @@ describe("Quiver", () => {
         }
         const q = new Quiver(mockElement)
 
-        expect(q.index).toEqual([[0, 1]])
-        expect(q.columns).toEqual([["0", "1"]])
+        expect(arrayFromVector(q.indexData)).toEqual([[0, 1]])
+        expect(q.columnNames).toEqual([["0", "1"]])
         expect(q.data.toArray().map(a => a?.toArray())).toEqual([
           [BigInt(1), BigInt(2)],
           [BigInt(3), BigInt(4)],
         ])
-        expect(q.types).toEqual({
+        expect(q.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.RangeIndex,
-              numpy_type: IndexTypeName.RangeIndex,
+              pandas_type: "range",
+              numpy_type: "range",
               meta: {
                 start: 0,
                 step: 1,
@@ -1167,10 +681,10 @@ describe("Quiver", () => {
           ],
         })
         // Check display values.
-        expect(q.getCell(1, 1).displayContent).toEqual("1")
-        expect(q.getCell(1, 2).displayContent).toEqual("2")
-        expect(q.getCell(2, 1).displayContent).toEqual("3")
-        expect(q.getCell(2, 2).displayContent).toEqual("4")
+        expect(getStyledCell(q, 0, 1)?.displayContent).toEqual("1")
+        expect(getStyledCell(q, 0, 2)?.displayContent).toEqual("2")
+        expect(getStyledCell(q, 1, 1)?.displayContent).toEqual("3")
+        expect(getStyledCell(q, 1, 2)?.displayContent).toEqual("4")
       })
     })
   })
@@ -1183,18 +697,20 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([vectorFromArray(["i1", "i2", "i1", "i2"])])
-        expect(qq.columns).toEqual([["c1", "c2"]])
+        expect(arrayFromVector(qq.indexData)).toEqual([
+          ["i1", "i2", "i1", "i2"],
+        ])
+        expect(qq.columnNames).toEqual([["c1", "c2"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.CategoricalIndex,
+              pandas_type: "categorical",
               numpy_type: "int8",
               meta: {
                 num_categories: 3,
@@ -1223,12 +739,10 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([
-          vectorFromArray([
-            978220800000, 1009756800000, 978220800000, 1009756800000,
-          ]),
+        expect(arrayFromVector(qq.indexData)).toEqual([
+          [978220800000, 1009756800000, 978220800000, 1009756800000],
         ])
-        expect(qq.columns).toEqual([
+        expect(qq.columnNames).toEqual([
           ["2000-12-31 00:00:00", "2001-12-31 00:00:00"],
         ])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
@@ -1249,10 +763,10 @@ describe("Quiver", () => {
             new Date("2020-10-20T00:00:00.000Z").getTime(),
           ],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.DatetimeIndex,
+              pandas_type: "datetime",
               numpy_type: "datetime64[ns]",
               meta: null,
             },
@@ -1278,19 +792,21 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([vectorFromArray([1.24, 2.35, 1.24, 2.35])])
-        expect(qq.columns).toEqual([["1.24", "2.35"]])
+        expect(arrayFromVector(qq.indexData)).toEqual([
+          [1.24, 2.35, 1.24, 2.35],
+        ])
+        expect(qq.columnNames).toEqual([["1.24", "2.35"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           [1.2, 1.3],
           [1.4, 1.5],
           [1.2, 1.3],
           [1.4, 1.5],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.Float64Index,
-              numpy_type: IndexTypeName.Float64Index,
+              pandas_type: "float64",
+              numpy_type: "float64",
               meta: null,
             },
           ],
@@ -1315,21 +831,21 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([
-          vectorFromArray([BigInt(1), BigInt(2), BigInt(1), BigInt(2)]),
+        expect(arrayFromVector(qq.indexData)).toEqual([
+          [BigInt(1), BigInt(2), BigInt(1), BigInt(2)],
         ])
-        expect(qq.columns).toEqual([["1", "2"]])
+        expect(qq.columnNames).toEqual([["1", "2"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           [BigInt(0), BigInt(1)],
           [BigInt(2), BigInt(3)],
           [BigInt(0), BigInt(1)],
           [BigInt(2), BigInt(3)],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.Int64Index,
-              numpy_type: IndexTypeName.Int64Index,
+              pandas_type: "int64",
+              numpy_type: "int64",
               meta: null,
             },
           ],
@@ -1354,10 +870,10 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index.toString()).toEqual(
+        expect(qq.indexData.toString()).toEqual(
           '[{"left": 1483228800000, "right": 1483315200000},{"left": 1483315200000, "right": 1483401600000},{"left": 1483228800000, "right": 1483315200000},{"left": 1483315200000, "right": 1483401600000}]'
         )
-        expect(qq.columns).toEqual([
+        expect(qq.columnNames).toEqual([
           ["(2017-01-01, 2017-01-02]", "(2017-01-02, 2017-01-03]"],
         ])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
@@ -1366,7 +882,7 @@ describe("Quiver", () => {
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -1395,17 +911,17 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index.toString()).toEqual(
+        expect(qq.indexData.toString()).toEqual(
           '[{"left": 0, "right": 1.5},{"left": 1.5, "right": 3},{"left": 0, "right": 1.5},{"left": 1.5, "right": 3}]'
         )
-        expect(qq.columns).toEqual([["(0.0, 1.5]", "(1.5, 3.0]"]])
+        expect(qq.columnNames).toEqual([["(0.0, 1.5]", "(1.5, 3.0]"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -1434,17 +950,17 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index.toString()).toEqual(
+        expect(qq.indexData.toString()).toEqual(
           '[{"left": 0, "right": 1},{"left": 1, "right": 2},{"left": 0, "right": 1},{"left": 1, "right": 2}]'
         )
-        expect(qq.columns).toEqual([["(0, 1]", "(1, 2]"]])
+        expect(qq.columnNames).toEqual([["(0, 1]", "(1, 2]"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -1473,17 +989,17 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index.toString()).toEqual(
+        expect(qq.indexData.toString()).toEqual(
           '[{"left": 0, "right": 1},{"left": 1, "right": 2},{"left": 0, "right": 1},{"left": 1, "right": 2}]'
         )
-        expect(qq.columns).toEqual([["(0, 1]", "(1, 2]"]])
+        expect(qq.columnNames).toEqual([["(0, 1]", "(1, 2]"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
           ["foo", BigInt(100)],
           ["bar", BigInt(200)],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
               pandas_type: "object",
@@ -1512,19 +1028,19 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([[0, 1, 2, 3]])
-        expect(qq.columns).toEqual([["0", "1"]])
+        expect(arrayFromVector(qq.indexData)).toEqual([[0, 1, 2, 3]])
+        expect(qq.columnNames).toEqual([["0", "1"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", "1"],
           ["bar", "2"],
           ["foo", "1"],
           ["bar", "2"],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.RangeIndex,
-              numpy_type: IndexTypeName.RangeIndex,
+              pandas_type: "range",
+              numpy_type: "range",
               meta: {
                 start: 0,
                 step: 1,
@@ -1555,21 +1071,21 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([
-          vectorFromArray([BigInt(1), BigInt(2), BigInt(1), BigInt(2)]),
+        expect(arrayFromVector(qq.indexData)).toEqual([
+          [BigInt(1), BigInt(2), BigInt(1), BigInt(2)],
         ])
-        expect(qq.columns).toEqual([["1", "2"]])
+        expect(qq.columnNames).toEqual([["1", "2"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           [BigInt(1), BigInt(2)],
           [BigInt(3), BigInt(4)],
           [BigInt(1), BigInt(2)],
           [BigInt(3), BigInt(4)],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.UInt64Index,
-              numpy_type: IndexTypeName.UInt64Index,
+              pandas_type: "uint64",
+              numpy_type: "uint64",
               meta: null,
             },
           ],
@@ -1594,18 +1110,20 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([vectorFromArray(["i1", "i2", "i1", "i2"])])
-        expect(qq.columns).toEqual([["c1", "c2"]])
+        expect(arrayFromVector(qq.indexData)).toEqual([
+          ["i1", "i2", "i1", "i2"],
+        ])
+        expect(qq.columnNames).toEqual([["c1", "c2"]])
         expect(qq.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", "1"],
           ["bar", "2"],
           ["foo", "1"],
           ["bar", "2"],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.UnicodeIndex,
+              pandas_type: "unicode",
               numpy_type: "object",
               meta: null,
             },
@@ -1642,11 +1160,11 @@ describe("Quiver", () => {
 
         const qq = q.addRows(q)
 
-        expect(qq.index).toEqual([
-          vectorFromArray([BigInt(1), BigInt(2), BigInt(1), BigInt(2)]),
-          vectorFromArray(["red", "blue", "red", "blue"]),
+        expect(arrayFromVector(qq.indexData)).toEqual([
+          [BigInt(1), BigInt(2), BigInt(1), BigInt(2)],
+          ["red", "blue", "red", "blue"],
         ])
-        expect(qq.columns).toEqual([
+        expect(qq.columnNames).toEqual([
           ["1", "2"],
           ["red", "blue"],
         ])
@@ -1656,15 +1174,15 @@ describe("Quiver", () => {
           ["foo", "1"],
           ["bar", "2"],
         ])
-        expect(qq.types).toEqual({
+        expect(qq.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.Int64Index,
-              numpy_type: IndexTypeName.Int64Index,
+              pandas_type: "int64",
+              numpy_type: "int64",
               meta: null,
             },
             {
-              pandas_type: IndexTypeName.UnicodeIndex,
+              pandas_type: "unicode",
               numpy_type: "object",
               meta: null,
             },
@@ -1692,18 +1210,20 @@ describe("Quiver", () => {
 
         const q1q2 = q1.addRows(q2)
 
-        expect(q1q2.index).toEqual([vectorFromArray(["i1", "i2", "i1", "i2"])])
-        expect(q1q2.columns).toEqual([["c1", "c2"]])
+        expect(arrayFromVector(q1q2.indexData)).toEqual([
+          ["i1", "i2", "i1", "i2"],
+        ])
+        expect(q1q2.columnNames).toEqual([["c1", "c2"]])
         expect(q1q2.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo", "1"],
           ["bar", "2"],
           ["baz", "1"],
           ["qux", "2"],
         ])
-        expect(q1q2.types).toEqual({
+        expect(q1q2.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.UnicodeIndex,
+              pandas_type: "unicode",
               numpy_type: "object",
               meta: null,
             },
@@ -1749,7 +1269,7 @@ describe("Quiver", () => {
         const q2 = new Quiver(mockElement)
 
         const q1q2 = q1.addRows(q2)
-        expect(q1q2.isEmpty()).toBe(true)
+        expect(q1q2.dimensions.numDataRows).toBe(0)
       })
 
       it("uses df1 columns if df2 has more columns than df1", () => {
@@ -1760,18 +1280,20 @@ describe("Quiver", () => {
 
         const q1q2 = q1.addRows(q2)
 
-        expect(q1q2.index).toEqual([vectorFromArray(["i1", "i2", "i1", "i2"])])
-        expect(q1q2.columns).toEqual([["c1"]])
+        expect(arrayFromVector(q1q2.indexData)).toEqual([
+          ["i1", "i2", "i1", "i2"],
+        ])
+        expect(q1q2.columnNames).toEqual([["c1"]])
         expect(q1q2.data.toArray().map(a => a?.toArray())).toEqual([
           ["foo"],
           ["bar"],
           ["foo"],
           ["bar"],
         ])
-        expect(q1q2.types).toEqual({
+        expect(q1q2.columnTypes).toEqual({
           index: [
             {
-              pandas_type: IndexTypeName.UnicodeIndex,
+              pandas_type: "unicode",
               numpy_type: "object",
               meta: null,
             },

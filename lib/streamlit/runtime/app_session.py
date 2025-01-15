@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Callable, Final
 
 import streamlit.elements.exception as exception_utils
 from streamlit import config, runtime
-from streamlit.case_converters import to_snake_case
 from streamlit.logger import get_logger
 from streamlit.proto.ClientState_pb2 import ClientState
 from streamlit.proto.Common_pb2 import FileURLs, FileURLsRequest
@@ -41,6 +40,7 @@ from streamlit.runtime.metrics_util import Installation
 from streamlit.runtime.pages_manager import PagesManager
 from streamlit.runtime.scriptrunner import RerunData, ScriptRunner, ScriptRunnerEvent
 from streamlit.runtime.secrets import secrets_singleton
+from streamlit.string_util import to_snake_case
 from streamlit.version import STREAMLIT_VERSION_STRING
 from streamlit.watcher import LocalSourcesWatcher
 
@@ -85,7 +85,7 @@ class AppSession:
         uploaded_file_manager: UploadedFileManager,
         script_cache: ScriptCache,
         message_enqueued_callback: Callable[[], None] | None,
-        user_info: dict[str, str | None],
+        user_info: dict[str, str | bool | None],
         session_id_override: str | None = None,
     ) -> None:
         """Initialize the AppSession.
@@ -177,11 +177,11 @@ class AppSession:
         """Register handlers to be called when various files are changed.
 
         Files that we watch include:
-          * source files that already exist (for edits)
-          * `.py` files in the the main script's `pages/` directory (for file additions
+          - source files that already exist (for edits)
+          - `.py` files in the the main script's `pages/` directory (for file additions
             and deletions)
-          * project and user-level config.toml files
-          * the project-level secrets.toml files
+          - project and user-level config.toml files
+          - the project-level secrets.toml files
 
         This method is called automatically on AppSession construction, but it may be
         called again in the case when a session is disconnected and is being reconnect
@@ -283,7 +283,6 @@ class AppSession:
         """Process a BackMsg."""
         try:
             msg_type = msg.WhichOneof("type")
-
             if msg_type == "rerun_script":
                 if msg.debug_last_backmsg_id:
                     self._debug_last_backmsg_id = msg.debug_last_backmsg_id
@@ -305,7 +304,7 @@ class AppSession:
                 _LOGGER.warning('No handler for "%s"', msg_type)
 
         except Exception as ex:
-            _LOGGER.error(ex)
+            _LOGGER.exception("Error processing back message")
             self.handle_backmsg_exception(ex)
 
     def handle_backmsg_exception(self, e: BaseException) -> None:
@@ -357,6 +356,28 @@ class AppSession:
         if client_state:
             fragment_id = client_state.fragment_id
 
+            # Early check whether this fragment still exists in the fragment storage or
+            # might have been removed by a full app run. This is not merely a
+            # performance optimization, but also fixes following potential situation:
+            # A fragment run might create a new ScriptRunner when the current
+            # ScriptRunner is in state STOPPED (in this case, the 'success' variable
+            # below is false and the new ScriptRunner is created). This will lead to all
+            # events that were not sent / received from the previous script runner to be
+            # ignored in _handle_scriptrunner_event_on_event_loop, because the
+            # _script_runner changed. When the full app rerun ScriptRunner is done
+            # (STOPPED) but its events are not processed before the new ScriptRunner is
+            # created, its finished message is not sent to the frontend and no
+            # full-app-run cleanup is happening. This scenario can be triggered by the
+            # example app described in
+            # https://github.com/streamlit/streamlit/issues/9921, where the dialog
+            # sometimes stays open.
+            if fragment_id and not self._fragment_storage.contains(fragment_id):
+                _LOGGER.info(
+                    f"The fragment with id {fragment_id} does not exist anymore - "
+                    "it might have been removed during a preceding full-app rerun."
+                )
+                return
+
             rerun_data = RerunData(
                 client_state.query_string,
                 client_state.widget_states,
@@ -399,6 +420,10 @@ class AppSession:
         """
         if self._scriptrunner is not None:
             self._scriptrunner.request_stop()
+
+    def clear_user_info(self) -> None:
+        """Clear the user info for this session."""
+        self._user_info.clear()
 
     def _create_scriptrunner(self, initial_rerun_data: RerunData) -> None:
         """Create and run a new ScriptRunner with the given RerunData."""
@@ -468,8 +493,10 @@ class AppSession:
         if self._local_sources_watcher is not None:
             self._local_sources_watcher.update_watched_pages()
 
-    def _clear_queue(self) -> None:
-        self._browser_queue.clear(retain_lifecycle_msgs=True)
+    def _clear_queue(self, fragment_ids_this_run: list[str] | None = None) -> None:
+        self._browser_queue.clear(
+            retain_lifecycle_msgs=True, fragment_ids_this_run=fragment_ids_this_run
+        )
 
     def _on_scriptrunner_event(
         self,
@@ -481,7 +508,6 @@ class AppSession:
         page_script_hash: str | None = None,
         fragment_ids_this_run: list[str] | None = None,
         pages: dict[PageHash, PageInfo] | None = None,
-        clear_forward_msg_queue: bool = True,
     ) -> None:
         """Called when our ScriptRunner emits an event.
 
@@ -499,7 +525,6 @@ class AppSession:
                 page_script_hash,
                 fragment_ids_this_run,
                 pages,
-                clear_forward_msg_queue,
             )
         )
 
@@ -513,7 +538,6 @@ class AppSession:
         page_script_hash: str | None = None,
         fragment_ids_this_run: list[str] | None = None,
         pages: dict[PageHash, PageInfo] | None = None,
-        clear_forward_msg_queue: bool = True,
     ) -> None:
         """Handle a ScriptRunner event.
 
@@ -573,13 +597,18 @@ class AppSession:
         if event == ScriptRunnerEvent.SCRIPT_STARTED:
             if self._state != AppSessionState.SHUTDOWN_REQUESTED:
                 self._state = AppSessionState.APP_IS_RUNNING
-
             assert (
                 page_script_hash is not None
             ), "page_script_hash must be set for the SCRIPT_STARTED event"
 
-            if clear_forward_msg_queue:
-                self._clear_queue()
+            # Update the client state with the new page_script_hash if
+            # necessary. This handles an edge case where a script is never
+            # finishes (eg. by calling st.rerun()), but the page has changed
+            # via st.navigation()
+            if page_script_hash != self._client_state.page_script_hash:
+                self._client_state.page_script_hash = page_script_hash
+
+            self._clear_queue(fragment_ids_this_run)
 
             self._enqueue_forward_msg(
                 self._create_new_session_message(
@@ -854,7 +883,8 @@ class AppSession:
             page_proto = msg.app_pages.add()
 
             page_proto.page_script_hash = page_script_hash
-            page_proto.page_name = page_info["page_name"]
+            page_proto.page_name = page_info["page_name"].replace("_", " ")
+            page_proto.url_pathname = page_info["page_name"]
             page_proto.icon = page_info["icon"]
 
 

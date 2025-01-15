@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { createEmotionColors } from "@streamlit/lib/src/theme/getColors"
 import {
   breakpoints,
   fonts,
@@ -21,14 +22,12 @@ import {
   fontWeights,
   genericFonts,
   iconSizes,
-  letterSpacings,
   lineHeights,
   radii,
   sizes,
   spacing,
   zIndices,
 } from "@streamlit/lib/src/theme/primitives"
-import { createEmotionColors } from "@streamlit/lib/src/theme/getColors"
 
 import genericColors from "./themeColors"
 
@@ -36,14 +35,12 @@ export default {
   inSidebar: false,
   breakpoints,
   colors: createEmotionColors(genericColors),
-  genericColors,
   fonts,
   fontSizes,
   fontWeights,
   genericFonts,
   iconSizes,
   lineHeights,
-  letterSpacings,
   radii,
   sizes,
   spacing,

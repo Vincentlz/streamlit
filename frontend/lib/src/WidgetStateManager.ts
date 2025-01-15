@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import produce, { Draft } from "immer"
+import { Draft, default as produce } from "immer"
 import { Long, util } from "protobufjs"
 import { Signal, SignalConnection } from "typed-signals"
 
@@ -147,6 +147,9 @@ class FormState {
   /** True if the form was created with the clear_on_submit flag. */
   public clearOnSubmit = false
 
+  /** True if the form was created with the enter_to_submit flag. */
+  public enterToSubmit = true
+
   /** Signal emitted when the form is cleared. */
   public readonly formCleared = new Signal()
 
@@ -209,11 +212,17 @@ export class WidgetStateManager {
   }
 
   /**
-   * Register a Form, and assign its clearOnSubmit value.
+   * Register a Form, and assign its clearOnSubmit & enterToSubmit values.
    * The `Form` element calls this when it's first mounted.
    */
-  public setFormClearOnSubmit(formId: string, clearOnSubmit: boolean): void {
-    this.getOrCreateFormState(formId).clearOnSubmit = clearOnSubmit
+  public setFormSubmitBehaviors(
+    formId: string,
+    clearOnSubmit: boolean,
+    enterToSubmit = true
+  ): void {
+    const form = this.getOrCreateFormState(formId)
+    form.clearOnSubmit = clearOnSubmit
+    form.enterToSubmit = enterToSubmit
   }
 
   /**
@@ -234,12 +243,6 @@ export class WidgetStateManager {
     const form = this.getOrCreateFormState(formId)
 
     const submitButtons = this.formsData.submitButtons.get(formId)
-    const disableForm = submitButtons?.some(
-      submitButton => submitButton.disabled
-    )
-    if (disableForm) {
-      return
-    }
 
     let selectedSubmitButton
 
@@ -280,6 +283,29 @@ export class WidgetStateManager {
     }
   }
 
+  /* Sometimes users change an input field and directly click on a button - which uses the trigger value -
+   * to trigger a rerun. We wrap the code that sends the trigger update in `setTimeout` so that trigger-based
+   * updates will be executed at the end of JavaScript's event loop. Callbacks for other elements, for example,
+   * the onBlur event of an input field, will be deterministically executed first in the event loop since they
+   * were encountered first in the sequential execution and will be executed FIFO from the task queue.
+   *
+   * Returns a promise that is resolved as soon as the timeout was triggered, mainly to make this easier to test.
+   * in our unit tests.
+   */
+  private setTriggerValueAtEndOfEventLoop(
+    widget: WidgetInfo,
+    source: Source,
+    fragmentId: string | undefined
+  ): Promise<void> {
+    return new Promise(resolve => {
+      setTimeout(() => {
+        this.onWidgetValueChanged(widget.formId, source, fragmentId)
+        this.deleteWidgetState(widget.id)
+        resolve()
+      }, 0)
+    })
+  }
+
   /**
    * Sets the string trigger value for the given widget ID to a string value,
    * sends a rerunScript message to the server, and then immediately unsets the
@@ -290,11 +316,10 @@ export class WidgetStateManager {
     value: string,
     source: Source,
     fragmentId: string | undefined
-  ): void {
+  ): Promise<void> {
     this.createWidgetState(widget, source).stringTriggerValue =
       new StringTriggerValue({ data: value })
-    this.onWidgetValueChanged(widget.formId, source, fragmentId)
-    this.deleteWidgetState(widget.id)
+    return this.setTriggerValueAtEndOfEventLoop(widget, source, fragmentId)
   }
 
   /**
@@ -305,10 +330,9 @@ export class WidgetStateManager {
     widget: WidgetInfo,
     source: Source,
     fragmentId: string | undefined
-  ): void {
+  ): Promise<void> {
     this.createWidgetState(widget, source).triggerValue = true
-    this.onWidgetValueChanged(widget.formId, source, fragmentId)
-    this.deleteWidgetState(widget.id)
+    return this.setTriggerValueAtEndOfEventLoop(widget, source, fragmentId)
   }
 
   public getBoolValue(widget: WidgetInfo): boolean | undefined {
@@ -677,10 +701,35 @@ export class WidgetStateManager {
   }
 
   /** Store the IDs of all forms with in-progress uploads. */
-  public setFormsWithUploads(formsWithUploads: Set<string>): void {
+  public setFormsWithUploadsInProgress(formsWithUploads: Set<string>): void {
     this.updateFormsData(draft => {
       draft.formsWithUploads = formsWithUploads
     })
+  }
+
+  /**
+   * Helper function to determine whether a form allows enter to submit
+   * for input elements (st.number_input, st.text_input, etc.)
+   * If in form, checks form's enterToSubmit paramf first, otherwise default
+   * behavior: Must have 1st submit button enabled to allow
+   */
+  public allowFormEnterToSubmit(formId: string): boolean {
+    // Don't allow if not in form
+    if (!isValidFormId(formId)) return false
+
+    // Check if user-set enterToSubmit param is false (in FormState)
+    const form = this.forms.get(formId)
+    if (form && !form.enterToSubmit) return false
+
+    // Otherwise, use default behavior
+    const submitButtons = this.formsData.submitButtons.get(formId)
+    const firstSubmitButton = submitButtons?.[0]
+
+    // If no submit buttons for the formId, invalid form
+    if (!firstSubmitButton) return false
+
+    // Allow form submit on enter as long as 1st submit button is not disabled
+    return !firstSubmitButton.disabled
   }
 
   /**

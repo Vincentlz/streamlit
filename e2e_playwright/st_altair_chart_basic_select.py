@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,14 @@ import streamlit as st
 # SCATTER CHART
 st.header("Altair Chart with point and interval selection")
 
+
 # taken from vega_datasets cars example
-cars = data.cars()
+@st.cache_data  # use caching to avoid a potential issue with flakiness
+def get_cars_data():
+    return data.cars()
+
+
+cars = get_cars_data()
 interval = alt.selection_interval()
 
 point = alt.selection_point()

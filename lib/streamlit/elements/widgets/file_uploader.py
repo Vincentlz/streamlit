@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@ from typing import TYPE_CHECKING, List, Literal, Sequence, Union, cast, overload
 from typing_extensions import TypeAlias
 
 from streamlit import config
-from streamlit.elements.form import current_form_id
+from streamlit.elements.lib.file_uploader_utils import normalize_upload_file_type
+from streamlit.elements.lib.form_utils import current_form_id
 from streamlit.elements.lib.policies import (
     check_widget_policies,
     maybe_raise_label_warnings,
@@ -29,6 +30,7 @@ from streamlit.elements.lib.policies import (
 from streamlit.elements.lib.utils import (
     Key,
     LabelVisibility,
+    compute_and_register_element_id,
     get_label_visibility_proto_value,
     to_key,
 )
@@ -43,7 +45,6 @@ from streamlit.runtime.state import (
     WidgetKwargs,
     register_widget,
 )
-from streamlit.runtime.state.common import compute_widget_id
 from streamlit.runtime.uploaded_file_manager import DeletedFile, UploadedFile
 
 if TYPE_CHECKING:
@@ -54,15 +55,6 @@ SomeUploadedFiles: TypeAlias = Union[
     DeletedFile,
     List[Union[UploadedFile, DeletedFile]],
     None,
-]
-
-
-TYPE_PAIRS = [
-    (".jpg", ".jpeg"),
-    (".mpg", ".mpeg"),
-    (".mp4", ".mpeg4"),
-    (".tif", ".tiff"),
-    (".htm", ".html"),
 ]
 
 
@@ -251,8 +243,9 @@ class FileUploaderMixin:
         label : str
             A short label explaining to the user what this file uploader is for.
             The label can optionally contain GitHub-flavored Markdown of the
-            following types: Bold, Italics, Strikethroughs, Inline Code, and
-            Links.
+            following types: Bold, Italics, Strikethroughs, Inline Code, Links,
+            and Images. Images display like icons, with a max height equal to
+            the font height.
 
             Unsupported Markdown elements are unwrapped so only their children
             (text contents) render. Display unsupported elements as literal
@@ -262,9 +255,9 @@ class FileUploaderMixin:
             See the ``body`` parameter of |st.markdown|_ for additional,
             supported Markdown directives.
 
-            For accessibility reasons, you should never set an empty label (label="")
-            but hide it with label_visibility if needed. In the future, we may disallow
-            empty labels by raising an exception.
+            For accessibility reasons, you should never set an empty label, but
+            you can hide it with ``label_visibility`` if needed. In the future,
+            we may disallow empty labels by raising an exception.
 
             .. |st.markdown| replace:: ``st.markdown``
             .. _st.markdown: https://docs.streamlit.io/develop/api-reference/text/st.markdown
@@ -281,11 +274,12 @@ class FileUploaderMixin:
         key : str or int
             An optional string or integer to use as the unique key for the widget.
             If this is omitted, a key will be generated for the widget
-            based on its content. Multiple widgets of the same type may
-            not share the same key.
+            based on its content. No two widgets may have the same key.
 
         help : str
-            A tooltip that gets displayed next to the file uploader.
+            An optional tooltip that gets displayed next to the widget label.
+            Streamlit only displays the tooltip when
+            ``label_visibility="visible"``.
 
         on_change : callable
             An optional callback invoked when this file_uploader's value
@@ -298,15 +292,14 @@ class FileUploaderMixin:
             An optional dict of kwargs to pass to the callback.
 
         disabled : bool
-            An optional boolean, which disables the file uploader if set to
-            True. The default is False. This argument can only be supplied by
-            keyword.
+            An optional boolean that disables the file uploader if set to
+            ``True``. The default is ``False``.
 
         label_visibility : "visible", "hidden", or "collapsed"
-            The visibility of the label. If "hidden", the label doesn't show but there
-            is still empty space for it above the widget (equivalent to label="").
-            If "collapsed", both the label and the space are removed. Default is
-            "visible".
+            The visibility of the label. The default is ``"visible"``. If this
+            is ``"hidden"``, Streamlit displays an empty spacer instead of the
+            label, which can help keep the widget alligned with other widgets.
+            If this is ``"collapsed"``, Streamlit displays no label or spacer.
 
         Returns
         -------
@@ -317,9 +310,9 @@ class FileUploaderMixin:
               uploaded files as UploadedFile objects. If no files were
               uploaded, returns an empty list.
 
-            The UploadedFile class is a subclass of BytesIO, and therefore
-            it is "file-like". This means you can pass them anywhere where
-            a file is expected.
+            The UploadedFile class is a subclass of BytesIO, and therefore is
+            "file-like". This means you can pass an instance of it anywhere a
+            file is expected.
 
         Examples
         --------
@@ -405,39 +398,21 @@ class FileUploaderMixin:
         )
         maybe_raise_label_warnings(label, label_visibility)
 
-        id = compute_widget_id(
+        element_id = compute_and_register_element_id(
             "file_uploader",
             user_key=key,
+            form_id=current_form_id(self.dg),
             label=label,
             type=type,
             accept_multiple_files=accept_multiple_files,
-            key=key,
             help=help,
-            form_id=current_form_id(self.dg),
-            page=ctx.active_script_hash if ctx else None,
         )
 
         if type:
-            if isinstance(type, str):
-                type = [type]
-
-            # May need a regex or a library to validate file types are valid
-            # extensions.
-            type = [
-                file_type if file_type[0] == "." else f".{file_type}"
-                for file_type in type
-            ]
-
-            type = [t.lower() for t in type]
-
-            for x, y in TYPE_PAIRS:
-                if x in type and y not in type:
-                    type.append(y)
-                if y in type and x not in type:
-                    type.append(x)
+            type = normalize_upload_file_type(type)
 
         file_uploader_proto = FileUploaderProto()
-        file_uploader_proto.id = id
+        file_uploader_proto.id = element_id
         file_uploader_proto.label = label
         file_uploader_proto.type[:] = type if type is not None else []
         file_uploader_proto.max_upload_size_mb = config.get_option(
@@ -459,15 +434,14 @@ class FileUploaderMixin:
         # representing the current set of files that this uploader should
         # know about.
         widget_state = register_widget(
-            "file_uploader",
-            file_uploader_proto,
-            user_key=key,
+            file_uploader_proto.id,
             on_change_handler=on_change,
             args=args,
             kwargs=kwargs,
             deserializer=serde.deserialize,
             serializer=serde.serialize,
             ctx=ctx,
+            value_type="file_uploader_state_value",
         )
 
         self.dg._enqueue("file_uploader", file_uploader_proto)

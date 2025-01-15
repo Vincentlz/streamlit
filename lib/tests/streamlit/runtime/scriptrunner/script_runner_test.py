@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,9 +26,9 @@ import pytest
 from parameterized import parameterized
 from tornado.testing import AsyncTestCase
 
-from streamlit.delta_generator import DeltaGenerator, dg_stack
+from streamlit.delta_generator import DeltaGenerator
+from streamlit.delta_generator_singletons import context_dg_stack
 from streamlit.elements.exception import _GENERIC_UNCAUGHT_EXCEPTION_TEXT
-from streamlit.errors import FragmentStorageKeyError
 from streamlit.proto.WidgetStates_pb2 import WidgetState, WidgetStates
 from streamlit.runtime import Runtime
 from streamlit.runtime.forward_msg_queue import ForwardMsgQueue
@@ -45,7 +45,7 @@ from streamlit.runtime.scriptrunner import (
     StopException,
 )
 from streamlit.runtime.scriptrunner.script_cache import ScriptCache
-from streamlit.runtime.scriptrunner.script_requests import (
+from streamlit.runtime.scriptrunner_utils.script_requests import (
     ScriptRequest,
     ScriptRequests,
     ScriptRequestType,
@@ -274,32 +274,6 @@ class ScriptRunnerTest(AsyncTestCase):
 
         Runtime._instance.media_file_mgr.clear_session_refs.assert_called_once()
 
-    @patch("streamlit.exception")
-    def test_run_nonexistent_fragment(self, patched_st_exception):
-        """Tests that we raise an exception when trying to run a nonexistent fragment."""
-        scriptrunner = TestScriptRunner("good_script.py")
-        scriptrunner.request_rerun(
-            RerunData(fragment_id_queue=["nonexistent_fragment"])
-        )
-        scriptrunner.start()
-        scriptrunner.join()
-
-        self._assert_events(
-            scriptrunner,
-            [
-                ScriptRunnerEvent.SCRIPT_STARTED,
-                # The only error ScriptRunnerEvent occurs when a script fails to
-                # compile. Other error types are displayed to the user via
-                # st.exception and from the ScriptRunner's perspective are still
-                # successful script runs.
-                ScriptRunnerEvent.FRAGMENT_STOPPED_WITH_SUCCESS,
-                ScriptRunnerEvent.SHUTDOWN,
-            ],
-        )
-
-        self._assert_no_exceptions(scriptrunner)
-        patched_st_exception.assert_called_once()
-
     def test_run_one_fragment(self):
         """Tests that we can run one fragment."""
         fragment = MagicMock()
@@ -319,6 +293,8 @@ class ScriptRunnerTest(AsyncTestCase):
                 ScriptRunnerEvent.SHUTDOWN,
             ],
         )
+        script_started_event_data = scriptrunner.event_data[0]
+        script_started_event_data["fragment_ids_this_run"] = ["my_fragment"]
 
         fragment.assert_called_once()
 
@@ -351,6 +327,12 @@ class ScriptRunnerTest(AsyncTestCase):
                 ScriptRunnerEvent.SHUTDOWN,
             ],
         )
+        script_started_event_data = scriptrunner.event_data[0]
+        script_started_event_data["fragment_ids_this_run"] = [
+            "my_fragment1",
+            "my_fragment2",
+            "my_fragment3",
+        ]
 
         fragment.assert_has_calls([call(), call(), call()])
         Runtime._instance.media_file_mgr.clear_session_refs.assert_not_called()
@@ -394,42 +376,7 @@ class ScriptRunnerTest(AsyncTestCase):
         fragment.assert_has_calls([call(), call()])
         Runtime._instance.media_file_mgr.clear_session_refs.assert_not_called()
 
-    @patch("streamlit.runtime.scriptrunner.exec_code.handle_uncaught_app_exception")
-    def test_FragmentStorageKeyError_becomes_RuntimeError(
-        self, patched_handle_exception
-    ):
-        fragment = MagicMock()
-        fragment.side_effect = FragmentStorageKeyError("kaboom")
-
-        scriptrunner = TestScriptRunner("good_script.py")
-        scriptrunner._fragment_storage.set("my_fragment", fragment)
-
-        scriptrunner.request_rerun(RerunData(fragment_id_queue=["my_fragment"]))
-        scriptrunner.start()
-        scriptrunner.join()
-
-        ex = patched_handle_exception.call_args[0][0]
-        assert isinstance(ex, RuntimeError)
-
-    @patch("streamlit.runtime.scriptrunner.exec_code.handle_uncaught_app_exception")
-    def test_FragmentStorageKeyError_for_autoRerun_is_not_raised(
-        self, patched_handle_exception
-    ):
-        fragment = MagicMock()
-        fragment.side_effect = FragmentStorageKeyError("kaboom")
-
-        scriptrunner = TestScriptRunner("good_script.py")
-        scriptrunner._fragment_storage.set("my_fragment", fragment)
-
-        scriptrunner.request_rerun(
-            RerunData(fragment_id_queue=["my_fragment"], is_auto_rerun=True)
-        )
-        scriptrunner.start()
-        scriptrunner.join()
-
-        assert patched_handle_exception.call_args is None
-
-    @patch("streamlit.runtime.fragment.get_script_run_ctx")
+    @patch("streamlit.runtime.scriptrunner.script_runner.get_script_run_ctx")
     @patch("streamlit.runtime.fragment.handle_uncaught_app_exception")
     def test_regular_KeyError_is_rethrown(
         self, patched_handle_exception, patched_get_script_run_ctx
@@ -556,7 +503,7 @@ class ScriptRunnerTest(AsyncTestCase):
 
         patched_call_callbacks.assert_called_once()
 
-    @patch("streamlit.exception")
+    @patch("streamlit.elements.exception._exception")
     @patch("streamlit.runtime.state.session_state.SessionState._call_callbacks")
     def test_calls_widget_callbacks_error(
         self, patched_call_callbacks, patched_st_exception
@@ -636,7 +583,7 @@ class ScriptRunnerTest(AsyncTestCase):
         )
         self._assert_text_deltas(scriptrunner, [])
 
-    @patch("streamlit.runtime.metrics_util.create_page_profile_message")
+    @patch("streamlit.runtime.scriptrunner.script_runner.create_page_profile_message")
     def test_uncaught_exception_gets_tracked(self, patched_create_page_profile_message):
         """Tests that we track uncaught exceptions."""
         with testutil.patch_config_options({"browser.gatherUsageStats": True}):
@@ -897,7 +844,7 @@ class ScriptRunnerTest(AsyncTestCase):
         )
         scriptrunner._fragment_storage.set(
             "my_fragment1",
-            lambda: dg_stack.set(dg_stack_set_by_fragment),
+            lambda: context_dg_stack.set(dg_stack_set_by_fragment),
         )
 
         # trigger a run with fragment_id to avoid clearing the fragment_storage in the script runner
@@ -935,7 +882,7 @@ class ScriptRunnerTest(AsyncTestCase):
         )
         scriptrunner._fragment_storage.set(
             "my_fragment1",
-            lambda: dg_stack.set(dg_stack_set_by_fragment),
+            lambda: context_dg_stack.set(dg_stack_set_by_fragment),
         )
 
         # trigger a run with fragment_id to avoid clearing the fragment_storage in the script runner
@@ -1211,7 +1158,7 @@ class TestScriptRunner(ScriptRunner):
             uploaded_file_mgr=MemoryUploadedFileManager("/mock/upload"),
             script_cache=ScriptCache(),
             initial_rerun_data=RerunData(),
-            user_info={"email": "test@test.com"},
+            user_info={"email": "test@example.com"},
             fragment_storage=MemoryFragmentStorage(),
             pages_manager=PagesManager(main_script_path),
         )
@@ -1249,11 +1196,11 @@ class TestScriptRunner(ScriptRunner):
             self.script_thread_exceptions.append(e)
 
     def _run_script(self, rerun_data: RerunData) -> None:
-        self.forward_msg_queue.clear()
+        self.clear_forward_msgs()
         super()._run_script(rerun_data)
 
         # Set the _dg_stack here to the one belonging to the thread context
-        self._dg_stack = dg_stack.get()
+        self._dg_stack = context_dg_stack.get()
 
     def join(self) -> None:
         """Join the script_thread if it's running."""

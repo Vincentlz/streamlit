@@ -1,5 +1,5 @@
 /**!
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ message Block {
   }
 
   bool allow_empty = 8;
+  optional string id = 12;
 
   message Vertical {
     bool border = 1;
@@ -55,6 +56,7 @@ message Block {
       BOTTOM = 2;
     }
     VerticalAlignment vertical_alignment = 3;
+    bool show_border = 4;
   }
 
   message Expandable {
@@ -79,6 +81,7 @@ message Block {
     string form_id = 1;
     bool clear_on_submit = 2;
     bool border = 3;
+    bool enter_to_submit = 4;
   }
 
   message TabContainer {
@@ -93,6 +96,7 @@ message Block {
     bool use_container_width = 2;
     string help = 3;
     bool disabled = 4;
+    string icon = 5;
   }
 
 
@@ -108,5 +112,5 @@ message Block {
     AvatarType avatar_type = 3;
   }
 
-  // Next ID: 12
+  // Next ID: 13
 }

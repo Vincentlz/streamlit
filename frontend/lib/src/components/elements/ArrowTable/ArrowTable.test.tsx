@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 import React from "react"
 
-import "@testing-library/jest-dom"
 import { screen } from "@testing-library/react"
 
 import { render } from "@streamlit/lib/src/test_util"
@@ -33,8 +32,10 @@ describe("st._arrow_table", () => {
   it("renders without crashing", () => {
     const props = getProps(UNICODE)
     render(<ArrowTable {...props} />)
+    const tableElement = screen.getByTestId("stTable")
+    expect(tableElement).toBeInTheDocument()
+    expect(tableElement).toHaveClass("stTable")
 
-    expect(screen.getByTestId("stTable")).toBeInTheDocument()
     expect(screen.getByTestId("stTableStyledTable")).toBeInTheDocument()
     expect(
       screen.queryByTestId("stTableStyledEmptyTableCell")

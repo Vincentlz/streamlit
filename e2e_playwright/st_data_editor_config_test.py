@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,14 +15,15 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction
+from e2e_playwright.shared.app_utils import check_top_level_class
 
 
 def test_data_editor_supports_various_configurations(
     app: Page, assert_snapshot: ImageCompareFunction
 ):
     """Screenshot test that st.data_editor supports various configuration options."""
-    # The dataframe config test is already testing with themed apps, so using the default theme
-    # only is fine here.
+    # The dataframe config test is already testing with themed apps, so using the
+    # default theme only is fine here.
     elements = app.get_by_test_id("stDataFrame")
     expect(elements).to_have_count(22)
 
@@ -51,3 +52,8 @@ def test_data_editor_supports_various_configurations(
     assert_snapshot(elements.nth(19), name="st_data_editor-bar_chart_column")
     assert_snapshot(elements.nth(20), name="st_data_editor-line_chart_column")
     assert_snapshot(elements.nth(21), name="st_data_editor-image_column")
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stDataFrame")

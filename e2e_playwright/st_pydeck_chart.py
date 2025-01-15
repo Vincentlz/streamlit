@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -135,4 +135,29 @@ st.pydeck_chart(
             ),
         ],
     )
+)
+
+st.pydeck_chart(
+    pdk.Deck(
+        map_style="mapbox://styles/mapbox/outdoors-v12",
+        initial_view_state=pdk.ViewState(
+            latitude=37.7749295, longitude=-122.4194155, zoom=12, bearing=0, pitch=30
+        ),
+        layers=[
+            pdk.Layer(
+                "H3HexagonLayer",
+                df,
+                pickable=True,
+                stroked=True,
+                filled=True,
+                get_hexagon="hex",
+                get_fill_color="[0, 255, 0]",
+                get_line_color=[255, 255, 255],
+                line_width_min_pixels=2,
+            ),
+        ],
+    ),
+    width=200,
+    height=250,
+    use_container_width=False,
 )

@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,15 +30,25 @@ from streamlit.errors import FragmentStorageKeyError
 from streamlit.logger import get_logger
 from streamlit.proto.ClientState_pb2 import ClientState
 from streamlit.proto.ForwardMsg_pb2 import ForwardMsg
-from streamlit.runtime.scriptrunner.exceptions import RerunException, StopException
-from streamlit.runtime.scriptrunner.exec_code import exec_func_with_error_handling
+from streamlit.runtime.metrics_util import (
+    create_page_profile_message,
+    to_microseconds,
+)
+from streamlit.runtime.scriptrunner.exec_code import (
+    exec_func_with_error_handling,
+    modified_sys_path,
+)
 from streamlit.runtime.scriptrunner.script_cache import ScriptCache
-from streamlit.runtime.scriptrunner.script_requests import (
+from streamlit.runtime.scriptrunner_utils.exceptions import (
+    RerunException,
+    StopException,
+)
+from streamlit.runtime.scriptrunner_utils.script_requests import (
     RerunData,
     ScriptRequests,
     ScriptRequestType,
 )
-from streamlit.runtime.scriptrunner.script_run_context import (
+from streamlit.runtime.scriptrunner_utils.script_run_context import (
     ScriptRunContext,
     add_script_run_ctx,
     get_script_run_ctx,
@@ -48,7 +58,6 @@ from streamlit.runtime.state import (
     SafeSessionState,
     SessionState,
 )
-from streamlit.vendor.ipython.modified_sys_path import modified_sys_path
 
 if TYPE_CHECKING:
     from streamlit.runtime.fragment import FragmentStorage
@@ -116,7 +125,7 @@ class ScriptRunner:
         uploaded_file_mgr: UploadedFileManager,
         script_cache: ScriptCache,
         initial_rerun_data: RerunData,
-        user_info: dict[str, str | None],
+        user_info: dict[str, str | bool | None],
         fragment_storage: FragmentStorage,
         pages_manager: PagesManager,
     ):
@@ -432,8 +441,6 @@ class ScriptRunner:
                 else main_page_info["page_script_hash"]
             )
 
-            fragment_ids_this_run = list(rerun_data.fragment_id_queue)
-
             ctx = self._get_script_run_ctx()
             # Clear widget state on page change. This normally happens implicitly
             # in the script run cleanup steps, but doing it explicitly ensures
@@ -455,20 +462,12 @@ class ScriptRunner:
                     widget_ids = {w.id for w in rerun_data.widget_states.widgets}
                 self._session_state.on_script_finished(widget_ids)
 
+            fragment_ids_this_run = list(rerun_data.fragment_id_queue)
+
             ctx.reset(
                 query_string=rerun_data.query_string,
                 page_script_hash=page_script_hash,
                 fragment_ids_this_run=fragment_ids_this_run,
-            )
-            self._pages_manager.reset_active_script_hash()
-
-            # We want to clear the forward_msg_queue during full script runs and
-            # fragment-scoped fragment reruns. For normal fragment runs, clearing the
-            # forward_msg_queue may cause us to drop messages either corresponding to
-            # other, unrelated fragments or that this fragment run depends on.
-            fragment_ids_this_run = rerun_data.fragment_id_queue
-            clear_forward_msg_queue = (
-                not fragment_ids_this_run or rerun_data.is_fragment_scoped_rerun
             )
 
             self.on_event.send(
@@ -477,7 +476,6 @@ class ScriptRunner:
                 page_script_hash=page_script_hash,
                 fragment_ids_this_run=fragment_ids_this_run,
                 pages=self._pages_manager.get_pages(),
-                clear_forward_msg_queue=clear_forward_msg_queue,
             )
 
             # Compile the script. Any errors thrown here will be surfaced
@@ -505,7 +503,7 @@ class ScriptRunner:
 
             except Exception as ex:
                 # We got a compile error. Send an error event and bail immediately.
-                _LOGGER.debug("Fatal script error: %s", ex)
+                _LOGGER.debug("Fatal script error", exc_info=ex)
                 self._session_state[SCRIPT_RUN_WITHOUT_ERRORS_KEY] = False
                 self.on_event.send(
                     self,
@@ -557,15 +555,24 @@ class ScriptRunner:
                                 wrapped_fragment()
 
                             except FragmentStorageKeyError:
-                                # Only raise an error if the fragment is not an
-                                # auto_rerun. If it is an auto_rerun, we might have a
-                                # race condition where the fragment_id is removed
-                                # but the webapp sends a rerun request before the
-                                # removal information has reached the web app
+                                # This can happen if the fragment_id is removed from the
+                                # storage before the script runner gets to it. In this
+                                # case, the fragment is simply skipped.
+                                # Also, only log an error if the fragment is not an
+                                # auto_rerun to avoid noise. If it is an auto_rerun, we
+                                # might have a race condition where the fragment_id is
+                                # removed but the webapp sends a rerun request before
+                                # the removal information has reached the web app
                                 # (see https://github.com/streamlit/streamlit/issues/9080).
                                 if not rerun_data.is_auto_rerun:
-                                    raise RuntimeError(
-                                        f"Could not find fragment with id {fragment_id}"
+                                    _LOGGER.warning(
+                                        f"Couldn't find fragment with id {fragment_id}."
+                                        " This can happen if the fragment does not"
+                                        " exist anymore when this request is processed,"
+                                        " for example because a full app rerun happened"
+                                        " that did not register the fragment."
+                                        " Usually this doesn't happen or no action is"
+                                        " required, so its mainly for debugging."
                                     )
                             except (RerunException, StopException) as e:
                                 # The wrapped_fragment function is executed
@@ -612,12 +619,6 @@ class ScriptRunner:
 
             if ctx.gather_usage_stats:
                 try:
-                    # Prevent issues with circular import
-                    from streamlit.runtime.metrics_util import (
-                        create_page_profile_message,
-                        to_microseconds,
-                    )
-
                     # Create and send page profile information
                     ctx.enqueue(
                         create_page_profile_message(

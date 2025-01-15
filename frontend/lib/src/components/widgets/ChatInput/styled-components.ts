@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ export interface StyledChatInputContainerProps {
 export const StyledChatInputContainer =
   styled.div<StyledChatInputContainerProps>(({ theme, width }) => {
     return {
-      borderRadius: theme.radii.default,
+      borderRadius: theme.radii.xxxl,
       display: "flex",
       backgroundColor:
         theme.colors.widgetBackgroundColor ?? theme.colors.secondaryBg,
@@ -37,7 +37,7 @@ export const StyledChatInput = styled.div(({ theme }) => {
     backgroundColor: theme.colors.transparent,
     position: "relative",
     flexGrow: 1,
-    borderRadius: theme.radii.default,
+    borderRadius: theme.radii.xxxl,
     display: "flex",
     alignItems: "center",
   }
@@ -57,14 +57,14 @@ export const StyledSendIconButton = styled.button<StyledSendIconButtonProps>(
     return {
       border: "none",
       backgroundColor: theme.colors.transparent,
-      borderTopRightRadius: extended ? theme.radii.none : theme.radii.default,
-      borderTopLeftRadius: extended ? theme.radii.default : theme.radii.none,
-      borderBottomRightRadius: theme.radii.default,
+      borderTopRightRadius: extended ? "0" : theme.radii.xxxl,
+      borderTopLeftRadius: extended ? theme.radii.default : "0",
+      borderBottomRightRadius: theme.radii.xxxl,
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
       lineHeight: theme.lineHeights.none,
-      margin: 0,
+      margin: theme.spacing.none,
       padding: theme.spacing.sm,
       color: disabled ? cleanIconColor : dirtyIconColor,
       pointerEvents: "auto",
@@ -80,8 +80,7 @@ export const StyledSendIconButton = styled.button<StyledSendIconButtonProps>(
           : theme.colors.gray90,
       },
       "&:hover": {
-        backgroundColor: theme.colors.primary,
-        color: theme.colors.white,
+        color: theme.colors.primary,
       },
       "&:disabled, &:disabled:hover, &:disabled:active": {
         backgroundColor: theme.colors.transparent,
@@ -92,17 +91,19 @@ export const StyledSendIconButton = styled.button<StyledSendIconButtonProps>(
   }
 )
 
-export const StyledSendIconButtonContainer = styled.div(() => ({
+export const StyledSendIconButtonContainer = styled.div({
   display: "flex",
   alignItems: "flex-end",
   height: "100%",
   position: "absolute",
-  right: "0px",
+  right: 0,
   pointerEvents: "none",
-}))
+})
 
-export const StyledInputInstructionsContainer = styled.div({
+export const StyledInputInstructionsContainer = styled.div(({ theme }) => ({
   position: "absolute",
   bottom: "0px",
-  right: "3rem",
-})
+  // Calculate the right padding to account for the send icon (iconSizes.xl + 2 * spacing.sm)
+  // and some additional margin between the icon and the text (spacing.sm).
+  right: `calc(${theme.iconSizes.xl} + 2 * ${theme.spacing.sm} + ${theme.spacing.sm})`,
+}))

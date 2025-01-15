@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ function shouldUseContainerWidth(
   return useContainerWidth === true ? true : false
 }
 
-function PageLink(props: Props): ReactElement {
+function PageLink(props: Readonly<Props>): ReactElement {
   const { onPageChange, currentPageScriptHash } = React.useContext(LibContext)
   const isInSidebar = React.useContext(IsSidebarContext)
 
@@ -77,17 +77,13 @@ function PageLink(props: Props): ReactElement {
       // MPA Page Link
       e.preventDefault()
       if (!disabled) {
-        onPageChange(element.pageScriptHash as string)
+        onPageChange(element.pageScriptHash)
       }
     }
   }
 
   return (
-    <div
-      className="row-widget stPageLink"
-      data-testid="stPageLink"
-      style={style}
-    >
+    <div className="stPageLink" data-testid="stPageLink" style={style}>
       <BaseButtonTooltip help={element.help} placement={Placement.TOP_RIGHT}>
         <StyledNavLinkContainer>
           <StyledNavLink

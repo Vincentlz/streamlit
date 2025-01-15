@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,13 +53,14 @@ function generateToastOverrides(theme: EmotionTheme): ToastOverrides {
     Body: {
       props: {
         "data-testid": "stToast",
+        className: "stToast",
       },
       style: {
         display: "flex",
         flexDirection: "row",
         gap: theme.spacing.md,
-        width: theme.sizes.sidebar,
-        marginTop: "8px",
+        width: theme.sizes.toastWidth,
+        marginTop: theme.spacing.sm,
         // Warnings logged if you use shorthand property here:
         borderTopLeftRadius: theme.radii.default,
         borderTopRightRadius: theme.radii.default,
@@ -114,7 +115,12 @@ export function shortenMessage(fullMessage: string): string {
   return fullMessage
 }
 
-export function Toast({ theme, body, icon, width }: ToastProps): ReactElement {
+export function Toast({
+  theme,
+  body,
+  icon,
+  width,
+}: Readonly<ToastProps>): ReactElement {
   const displayMessage = shortenMessage(body)
   const shortened = body !== displayMessage
 
@@ -129,33 +135,30 @@ export function Toast({ theme, body, icon, width }: ToastProps): ReactElement {
 
   const toastContent = useMemo(
     () => (
-      <>
-        <StyledToastWrapper expanded={expanded}>
-          {icon && (
-            <DynamicIcon
-              iconValue={icon}
-              size="xl"
-              testid="stToastDynamicIcon"
-            />
+      <StyledToastWrapper expanded={expanded}>
+        {icon && (
+          <DynamicIcon
+            iconValue={icon}
+            size="xl"
+            testid="stToastDynamicIcon"
+          />
+        )}
+        <StyledMessageWrapper>
+          <StreamlitMarkdown
+            source={expanded ? body : displayMessage}
+            allowHTML={false}
+            isToast
+          />
+          {shortened && (
+            <StyledViewButton
+              data-testid="stToastViewButton"
+              onClick={handleClick}
+            >
+              {expanded ? "view less" : "view more"}
+            </StyledViewButton>
           )}
-          <StyledMessageWrapper>
-            <StreamlitMarkdown
-              source={expanded ? body : displayMessage}
-              allowHTML={false}
-              isToast
-            />
-            {shortened && (
-              <StyledViewButton
-                data-testid="toastViewButton"
-                className="toastViewButton"
-                onClick={handleClick}
-              >
-                {expanded ? "view less" : "view more"}
-              </StyledViewButton>
-            )}
-          </StyledMessageWrapper>
-        </StyledToastWrapper>
-      </>
+        </StyledMessageWrapper>
+      </StyledToastWrapper>
     ),
     [shortened, expanded, body, icon, displayMessage, handleClick]
   )
@@ -163,7 +166,9 @@ export function Toast({ theme, body, icon, width }: ToastProps): ReactElement {
   useEffect(() => {
     // Handles the error case where st.sidebar.toast is called since
     // baseweb would throw error anyway (no toast container in sidebar)
-    if (theme.inSidebar) return
+    if (theme.inSidebar) {
+      return
+    }
 
     // Uses toaster utility to create toast on mount and generate unique key
     // to reference that toast for update/removal
@@ -182,6 +187,8 @@ export function Toast({ theme, body, icon, width }: ToastProps): ReactElement {
     }
 
     // Array must be empty to run as mount/cleanup
+    // TODO: Update to match React best practices
+    // eslint-disable-next-line react-compiler/react-compiler
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

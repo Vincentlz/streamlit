@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@ import BaseButton, {
   BaseButtonKind,
   BaseButtonSize,
   BaseButtonTooltip,
+  DynamicButtonLabel,
 } from "@streamlit/lib/src/components/shared/BaseButton"
 import { WidgetStateManager } from "@streamlit/lib/src/WidgetStateManager"
-import StreamlitMarkdown from "@streamlit/lib/src/components/shared/StreamlitMarkdown"
 
 export interface Props {
   disabled: boolean
@@ -37,17 +37,19 @@ function Button(props: Props): ReactElement {
   const { disabled, element, widgetMgr, width, fragmentId } = props
   const style = { width }
 
-  const kind =
-    element.type === "primary"
-      ? BaseButtonKind.PRIMARY
-      : BaseButtonKind.SECONDARY
+  let kind = BaseButtonKind.SECONDARY
+  if (element.type === "primary") {
+    kind = BaseButtonKind.PRIMARY
+  } else if (element.type === "tertiary") {
+    kind = BaseButtonKind.TERTIARY
+  }
 
   // When useContainerWidth true & has help tooltip,
   // we need to pass the container width down to the button
   const fluidWidth = element.help ? width : true
 
   return (
-    <div className="row-widget stButton" data-testid="stButton" style={style}>
+    <div className="stButton" data-testid="stButton" style={style}>
       <BaseButtonTooltip help={element.help}>
         <BaseButton
           kind={kind}
@@ -58,13 +60,7 @@ function Button(props: Props): ReactElement {
             widgetMgr.setTriggerValue(element, { fromUi: true }, fragmentId)
           }
         >
-          <StreamlitMarkdown
-            source={element.label}
-            allowHTML={false}
-            isLabel
-            largerLabel
-            disableLinks
-          />
+          <DynamicButtonLabel icon={element.icon} label={element.label} />
         </BaseButton>
       </BaseButtonTooltip>
     </div>

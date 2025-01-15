@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import time
 
 import streamlit as st
 
@@ -66,3 +68,14 @@ fragment_with_rerun_in_try_block()
 # have elements in the main app after fragments to ensure that the main app elements are
 #  not cleared when rerunning fragments
 st.write(f"app run count: {st.session_state.count}")
+
+if "foo" not in st.session_state:
+    st.write("Setting state")
+    st.session_state["foo"] = "bar"
+
+if st.button("#8599 - Bug"):
+    # Allow for forward message queue to flush button element
+    time.sleep(1)
+
+    del st.session_state["foo"]
+    st.rerun()

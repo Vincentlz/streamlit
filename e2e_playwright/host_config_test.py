@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,15 +37,15 @@ def test_disable_fullscreen(
     page.goto(f"http://localhost:{app_port}")
     wait_for_app_loaded(page)
 
-    # check that the image does not have the fullscreen button
-    expect(page.get_by_test_id("StyledFullScreenButton")).to_have_count(0)
-
     # Test that the toolbar is not shown when hovering over a dataframe
     dataframe_element = page.get_by_test_id("stDataFrame").nth(0)
     dataframe_toolbar = dataframe_element.get_by_test_id("stElementToolbar")
 
     # Hover over dataframe
     dataframe_element.hover()
+
+    expect(page.get_by_role("button", name="Fullscreen")).not_to_be_attached()
+
     # Check that it is visible (expect waits)
     expect(dataframe_toolbar).to_have_css("opacity", "1")
     # Take a snapshot

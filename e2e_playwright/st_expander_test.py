@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction, wait_for_app_run
-from e2e_playwright.shared.app_utils import get_expander
+from e2e_playwright.shared.app_utils import check_top_level_class, get_expander
 
 EXPANDER_HEADER_IDENTIFIER = "summary"
 
@@ -25,7 +25,7 @@ def test_expander_displays_correctly(
 ):
     """Test that all expanders are displayed correctly via screenshot testing."""
     expander_elements = themed_app.get_by_test_id("stExpander")
-    expect(expander_elements).to_have_count(8)
+    expect(expander_elements).to_have_count(9)
 
     for expander in expander_elements.all():
         expect(expander.locator(EXPANDER_HEADER_IDENTIFIER)).to_be_visible()
@@ -38,13 +38,14 @@ def test_expander_displays_correctly(
     assert_snapshot(expander_elements.nth(5), name="st_expander-long_collapsed")
     assert_snapshot(expander_elements.nth(6), name="st_expander-with_material_icon")
     assert_snapshot(expander_elements.nth(7), name="st_expander-with_emoji_icon")
+    assert_snapshot(expander_elements.nth(8), name="st_expander-markdown_label")
 
 
 def test_expander_collapses_and_expands(app: Page):
     """Test that an expander collapses and expands."""
-    main_container = app.get_by_test_id("stAppViewBlockContainer")
+    main_container = app.get_by_test_id("stMain")
     main_expanders = main_container.get_by_test_id("stExpander")
-    expect(main_expanders).to_have_count(7)
+    expect(main_expanders).to_have_count(8)
 
     expanders = main_expanders.all()
     # Starts expanded
@@ -73,9 +74,9 @@ def test_empty_expander_not_rendered(app: Page):
 
 def test_expander_session_state_set(app: Page):
     """Test that session state updates are propagated to expander content"""
-    main_container = app.get_by_test_id("stAppViewBlockContainer")
+    main_container = app.get_by_test_id("stMain")
     main_expanders = main_container.get_by_test_id("stExpander")
-    expect(main_expanders).to_have_count(7)
+    expect(main_expanders).to_have_count(8)
 
     # Show the Number Input
     num_input = main_expanders.nth(2).get_by_test_id("stNumberInput").locator("input")
@@ -112,3 +113,8 @@ def test_expander_renders_icon(app: Page):
     )
     expect(emoji_icon).to_be_visible()
     expect(emoji_icon).to_have_text("🎈")
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stExpander")

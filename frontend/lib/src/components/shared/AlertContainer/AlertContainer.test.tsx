@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import React from "react"
 import { screen } from "@testing-library/react"
 
 import { render } from "@streamlit/lib/src/test_util"
-import "@testing-library/jest-dom"
 
 import AlertContainer, { AlertContainerProps, Kind } from "./AlertContainer"
 
@@ -35,7 +34,9 @@ const getProps = (
 describe("AlertContainer element", () => {
   it("renders a Notification", () => {
     render(<AlertContainer {...getProps()} />)
-    expect(screen.getByTestId("stNotification")).toBeInTheDocument()
+    const alertContainer = screen.getByTestId("stAlertContainer")
+    expect(alertContainer).toBeInTheDocument()
+    expect(alertContainer).toHaveClass("stAlertContainer")
   })
 
   it("renders its children", () => {

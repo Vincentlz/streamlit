@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ export interface EventContainerProps {
 function EventContainer({
   scriptRunId,
   children,
-}: EventContainerProps): ReactElement {
-  const { sizes }: EmotionTheme = useTheme()
+}: Readonly<EventContainerProps>): ReactElement {
+  const theme: EmotionTheme = useTheme()
 
   useEffect(() => {
     // Ensure all toasts cleared on script re-run
@@ -46,12 +46,12 @@ function EventContainer({
           Root: {
             style: {
               // Avoids blocking the header
-              top: sizes.headerHeight,
-              // Toasts overlap chatInput container
-              zIndex: 100,
+              top: theme.sizes.headerHeight,
+              zIndex: theme.zIndices.toast,
             },
             props: {
-              "data-testid": "toastContainer",
+              "data-testid": "stToastContainer",
+              className: "stToastContainer",
             },
           },
         }}

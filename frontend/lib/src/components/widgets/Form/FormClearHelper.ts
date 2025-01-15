@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+ * Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+import { useEffect } from "react"
 
 import { SignalConnection } from "typed-signals"
 
@@ -36,7 +38,8 @@ export class FormClearHelper {
    * subscription and unsubscription happen correctly.
    *
    * Hooks-based widgets can just use `useEffect` and call
-   * `widgetMgr.addFormClearedListener` directly.
+   * `widgetMgr.addFormClearedListener` directly. Or just use the convenient
+   * hook `useFormClearHelper`, below.
    */
   public manageFormClearListener(
     widgetMgr: WidgetStateManager,
@@ -77,4 +80,35 @@ export class FormClearHelper {
     this.lastWidgetMgr = undefined
     this.lastFormId = undefined
   }
+}
+
+interface FormElementProtoInterface {
+  formId: string
+}
+
+interface FormClearHelperArgs {
+  element: FormElementProtoInterface
+  widgetMgr: WidgetStateManager
+  onFormCleared: () => void
+}
+
+export function useFormClearHelper({
+  element,
+  widgetMgr,
+  onFormCleared,
+}: FormClearHelperArgs): void {
+  useEffect(() => {
+    if (!isValidFormId(element.formId)) {
+      return
+    }
+
+    const formClearListener = widgetMgr.addFormClearedListener(
+      element.formId,
+      onFormCleared
+    )
+
+    return () => {
+      formClearListener.disconnect()
+    }
+  }, [element, widgetMgr, onFormCleared])
 }

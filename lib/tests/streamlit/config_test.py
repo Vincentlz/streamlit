@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import pytest
 from parameterized import parameterized
 
 from streamlit import config, env_util
+from streamlit.config import ShowErrorDetailsConfigOptions
 from streamlit.config_option import ConfigOption
 from streamlit.errors import StreamlitAPIException
 
@@ -58,15 +59,25 @@ class ConfigTest(unittest.TestCase):
     def test_set_user_option_scriptable(self):
         """Test that scriptable options can be set from API."""
         # This is set in lib/tests/conftest.py to off
-        self.assertEqual(True, config.get_option("client.showErrorDetails"))
+        self.assertEqual(
+            ShowErrorDetailsConfigOptions.FULL,
+            config.get_option("client.showErrorDetails"),
+        )
 
         try:
             # client.showErrorDetails can be set after run starts.
-            config.set_user_option("client.showErrorDetails", False)
-            self.assertEqual(False, config.get_option("client.showErrorDetails"))
+            config.set_user_option(
+                "client.showErrorDetails", ShowErrorDetailsConfigOptions.STACKTRACE
+            )
+            self.assertEqual(
+                ShowErrorDetailsConfigOptions.STACKTRACE,
+                config.get_option("client.showErrorDetails"),
+            )
         finally:
             # Restore original value
-            config.set_user_option("client.showErrorDetails", True)
+            config.set_user_option(
+                "client.showErrorDetails", ShowErrorDetailsConfigOptions.FULL
+            )
 
     def test_set_user_option_unscriptable(self):
         """Test that unscriptable options cannot be set with st.set_option."""
@@ -84,13 +95,31 @@ class ConfigTest(unittest.TestCase):
         )
 
         # Test that it works.
-        self.assertEqual(config_option.key, "_test.simpleParam")
-        self.assertEqual(config_option.section, "_test")
-        self.assertEqual(config_option.name, "simpleParam")
-        self.assertEqual(config_option.description, "Simple config option.")
-        self.assertEqual(config_option.where_defined, ConfigOption.DEFAULT_DEFINITION)
-        self.assertEqual(config_option.value, 12345)
-        self.assertEqual(config_option.env_var, "STREAMLIT__TEST_SIMPLE_PARAM")
+        assert config_option.key == "_test.simpleParam"
+        assert config_option.section == "_test"
+        assert config_option.name == "simpleParam"
+        assert config_option.description == "Simple config option."
+        assert config_option.where_defined == ConfigOption.DEFAULT_DEFINITION
+        assert config_option.value == 12345
+        assert config_option.env_var == "STREAMLIT__TEST_SIMPLE_PARAM"
+        assert not config_option.multiple
+
+    def test_multiple_config_option(self):
+        """Test creating a multiple value config option."""
+        config_option = ConfigOption(
+            "_test.simpleParam",
+            description="Simple config option.",
+            default_val=[12345],
+        )
+
+        assert config_option.key == "_test.simpleParam"
+        assert config_option.section == "_test"
+        assert config_option.name == "simpleParam"
+        assert config_option.description == "Simple config option."
+        assert config_option.where_defined == ConfigOption.DEFAULT_DEFINITION
+        assert config_option.value == [12345]
+        assert config_option.env_var == "STREAMLIT__TEST_SIMPLE_PARAM"
+        assert config_option.multiple
 
     def test_complex_config_option(self):
         """Test setting a complex (functional) config option."""
@@ -315,6 +344,20 @@ class ConfigTest(unittest.TestCase):
 
         config._delete_option("_test.testDeleteOption")
 
+    def test_multiple_value_option(self):
+        option = config._create_option(
+            "_test.testMultipleValueOption",
+            description="This option tests multiple values for an option",
+            default_val=["Option 1", "Option 2"],
+        )
+
+        assert option.multiple
+        config.get_config_options(force_reparse=True)
+        assert config.get_option("_test.testMultipleValueOption") == [
+            "Option 1",
+            "Option 2",
+        ]
+
     def test_sections_order(self):
         sections = sorted(
             [
@@ -391,6 +434,7 @@ class ConfigTest(unittest.TestCase):
                 "server.enableArrowTruncation",
                 "server.sslCertFile",
                 "server.sslKeyFile",
+                "server.disconnectedSessionTTL",
                 "ui.hideTopBar",
             ]
         )
@@ -438,15 +482,21 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(1234, config._maybe_read_env_variable("env:RANDOM_TEST"))
 
     def test_update_config_with_toml(self):
-        self.assertEqual(True, config.get_option("client.showErrorDetails"))
+        self.assertEqual(
+            ShowErrorDetailsConfigOptions.FULL,
+            config.get_option("client.showErrorDetails"),
+        )
         toml = textwrap.dedent(
             """
            [client]
-           showErrorDetails = false
+           showErrorDetails = "type"
         """
         )
         config._update_config_with_toml(toml, "test")
-        self.assertEqual(False, config.get_option("client.showErrorDetails"))
+        self.assertEqual(
+            ShowErrorDetailsConfigOptions.TYPE,
+            config.get_option("client.showErrorDetails"),
+        )
 
     def test_set_option(self):
         with self.assertLogs(logger="streamlit.config", level="WARNING") as cm:

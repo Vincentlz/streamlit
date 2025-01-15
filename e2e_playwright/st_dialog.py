@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
 import numpy as np
 import pandas as pd
 
 import streamlit as st
-from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+
+np.random.seed(0)
+data = np.random.randint(low=0, high=20, size=(20, 3))
 
 
 @st.dialog("Test Dialog with Images")
@@ -150,3 +155,42 @@ def dialog_with_deprecation_warning():
 
 if st.button("Open Dialog with deprecation warning"):
     dialog_with_deprecation_warning()
+
+
+@st.fragment()
+def fragment():
+    if st.button("Fragment Button"):
+        st.write("Fragment Button clicked")
+
+
+fragment()
+
+
+@st.dialog("Dialog with chart")
+def dialog_with_chart():
+    st.write("This dialog has a chart")
+    st.bar_chart(pd.DataFrame(data, columns=["a", "b", "c"]))
+
+
+if st.button("Open Chart Dialog"):
+    dialog_with_chart()
+
+
+@st.dialog("Dialog with dataframe")
+def dialog_with_dataframe():
+    st.dataframe(pd.DataFrame(data, columns=["a", "b", "c"]), use_container_width=True)
+
+
+if st.button("Open Dialog with dataframe"):
+    dialog_with_dataframe()
+
+
+@st.dialog("Dialog with rerun")
+def dialog_with_rerun():
+    if st.button("Close Dialog"):
+        time.sleep(0.15)
+        st.rerun()
+
+
+if st.button("Open Dialog with rerun"):
+    dialog_with_rerun()

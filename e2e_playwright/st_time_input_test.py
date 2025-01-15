@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,11 @@
 from playwright.sync_api import Page, expect
 
 from e2e_playwright.conftest import ImageCompareFunction
-from e2e_playwright.shared.app_utils import expect_help_tooltip
+from e2e_playwright.shared.app_utils import (
+    check_top_level_class,
+    expect_help_tooltip,
+    get_element_by_key,
+)
 
 
 def test_time_input_widget_rendering(
@@ -23,7 +27,7 @@ def test_time_input_widget_rendering(
 ):
     """Test that the time input widgets are correctly rendered via screenshot matching."""
     time_input_widgets = themed_app.get_by_test_id("stTimeInput")
-    expect(time_input_widgets).to_have_count(9)
+    expect(time_input_widgets).to_have_count(10)
 
     assert_snapshot(time_input_widgets.nth(0), name="st_time_input-8_45")
     assert_snapshot(time_input_widgets.nth(1), name="st_time_input-21_15_help")
@@ -34,6 +38,7 @@ def test_time_input_widget_rendering(
     assert_snapshot(time_input_widgets.nth(6), name="st_time_input-step_60")
     assert_snapshot(time_input_widgets.nth(7), name="st_time_input-empty")
     assert_snapshot(time_input_widgets.nth(8), name="st_time_input-value_from_state")
+    assert_snapshot(time_input_widgets.nth(9), name="st_time_input-markdown_label")
 
 
 def test_help_tooltip_works(app: Page):
@@ -213,3 +218,13 @@ def test_handles_callback_on_change_correctly(app: Page):
     expect(app.get_by_test_id("stMarkdown").nth(6)).to_have_text(
         "time input changed: False", use_inner_text=True
     )
+
+
+def test_check_top_level_class(app: Page):
+    """Check that the top level class is correctly set."""
+    check_top_level_class(app, "stTimeInput")
+
+
+def test_custom_css_class_via_key(app: Page):
+    """Test that the element can have a custom css class via the key argument."""
+    expect(get_element_by_key(app, "time_input_6")).to_be_visible()

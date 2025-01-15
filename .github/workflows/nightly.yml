@@ -75,7 +75,8 @@ jobs:
     with:
       ref: ${{needs.create-nightly-tag.outputs.tag}}
     secrets:
-      PARAMETER_PASSWORD: ${{ secrets.PARAMETER_PASSWORD }}
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
 
   run-javascript-tests:
     needs: create-nightly-tag
@@ -83,16 +84,16 @@ jobs:
     with:
       ref: ${{needs.create-nightly-tag.outputs.tag}}
 
-  run-cypress-tests:
-    needs: create-nightly-tag
-    uses: ./.github/workflows/cypress.yml
-    with:
-      ref: ${{needs.create-nightly-tag.outputs.tag}}
-
   run-playwright-tests:
     uses: ./.github/workflows/playwright.yml
     with:
       ref: ${{needs.create-nightly-tag.outputs.tag}}
+
+  performance-lighthouse:
+    uses: ./.github/workflows/performance-lighthouse.yml
+    with:
+      ref: ${{needs.create-nightly-tag.outputs.tag}}
+      externalCall: true
 
   test-status-notification:
     runs-on: ubuntu-latest
@@ -104,7 +105,6 @@ jobs:
       - create-nightly-tag
       - run-python-tests
       - run-javascript-tests
-      - run-cypress-tests
       - run-playwright-tests
 
     env:
@@ -122,8 +122,6 @@ jobs:
         run: python scripts/slack_notifications.py nightly python
       - if: ${{ needs.run-javascript-tests.result == 'failure' }}
         run: python scripts/slack_notifications.py nightly js
-      - if: ${{ needs.run-cypress-tests.result == 'failure' }}
-        run: python scripts/slack_notifications.py nightly cypress
       - if: ${{ needs.run-playwright-tests.result == 'failure' }}
         run: python scripts/slack_notifications.py nightly playwright
 
@@ -135,7 +133,6 @@ jobs:
       - create-nightly-tag
       - run-python-tests
       - run-javascript-tests
-      - run-cypress-tests
       - run-playwright-tests
     permissions:
       id-token: write
@@ -193,8 +190,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.CORE_PREVIEWS_S3_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CORE_PREVIEWS_S3_SECRET_KEY }}
         run: |
-          sudo apt update
-          sudo apt install -y awscli
+          # Install awscli via pip/uv:
+          uv pip install awscli
 
           cd lib/dist
           export WHEELFILE="$(ls -t *.whl | head -n 1)"

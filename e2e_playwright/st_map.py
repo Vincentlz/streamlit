@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,16 +37,16 @@ coords: "np.typing.NDArray[np.float64]" = cast(
     Any,
     np.random.randn(1000, 2) / [50, 50],
 ) + [37.76, -122.4]
-df = pd.DataFrame(coords, columns=["lat", "lon"])
+simple_map_df = pd.DataFrame(coords, columns=["lat", "lon"])
 
-st.map(df)
+st.map(simple_map_df)
 
 
 """
 ### Simple map with zoom
 """
 
-st.map(df, zoom=8)
+st.map(simple_map_df, zoom=8)
 
 
 """
@@ -70,3 +70,10 @@ st.map(
     size="size",
     use_container_width=False,
 )
+
+
+"""
+### Simple map with defined width and height
+"""
+
+st.map(simple_map_df, width=200, height=250, use_container_width=False)

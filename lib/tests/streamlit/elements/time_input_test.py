@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,7 +63,13 @@ class TimeInputTest(DeltaGeneratorTestCase):
         self.assertEqual(c.HasField("default"), False)
 
     @parameterized.expand(
-        [(time(8, 45), "08:45"), (datetime(2019, 7, 6, 21, 15), "21:15")]
+        [
+            (time(8, 45), "08:45"),
+            (datetime(2019, 7, 6, 21, 15), "21:15"),
+            ("21:15:00", "21:15"),
+            ("21:15:10.123", "21:15"),
+            ("2019-07-06 21:15:10.123", "21:15"),
+        ]
     )
     def test_value_types(self, arg_value, proto_value):
         """Test that it supports different types of values."""

@@ -1,4 +1,4 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2024)
+# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022-2025)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -82,10 +82,10 @@ def _create_test_session(
     ):
         return AppSession(
             script_data=ScriptData("/fake/script_path.py", is_hello=False),
-            uploaded_file_manager=MagicMock(),
+            uploaded_file_manager=MagicMock(spec=UploadedFileManager),
             script_cache=MagicMock(),
             message_enqueued_callback=None,
-            user_info={"email": "test@test.com"},
+            user_info={"email": "test@example.com"},
             session_id_override=session_id_override,
         )
 
@@ -284,14 +284,43 @@ class AppSessionTest(unittest.TestCase):
         self, mock_create_scriptrunner: MagicMock
     ):
         session = _create_test_session()
+        fragment_id = "my_fragment_id"
+        session._fragment_storage.set(fragment_id, lambda: None)
 
         mock_active_scriptrunner = MagicMock(spec=ScriptRunner)
         session._scriptrunner = mock_active_scriptrunner
 
-        session.request_rerun(ClientState(fragment_id="my_fragment_id"))
+        session.request_rerun(ClientState(fragment_id=fragment_id))
 
         # The active ScriptRunner should *not* be shut down or stopped.
         mock_active_scriptrunner.request_rerun.assert_called_once()
+        mock_active_scriptrunner.request_stop.assert_not_called()
+
+        # And a new ScriptRunner should *not* be created.
+        mock_create_scriptrunner.assert_not_called()
+
+    @patch_config_options({"runner.fastReruns": True})
+    @patch("streamlit.runtime.app_session.AppSession._create_scriptrunner")
+    def test_rerun_fragment_does_not_request_existing_scriptrunner_when_not_existing(
+        self, mock_create_scriptrunner: MagicMock
+    ):
+        """In case the fragment was removed by a preceding full app run, we want to exit
+        early and not request a rerun on the existing ScriptRunner.
+        """
+        session = _create_test_session()
+        fragment_id = "my_fragment_id"
+
+        # leaving the following code line in to show that the fragment id
+        # is not set in the fragment storage!
+        # session._fragment_storage.set(fragment_id, lambda: None)
+
+        mock_active_scriptrunner = MagicMock(spec=ScriptRunner)
+        session._scriptrunner = mock_active_scriptrunner
+
+        session.request_rerun(ClientState(fragment_id=fragment_id))
+
+        # The active ScriptRunner should *not* be requested at all.
+        mock_active_scriptrunner.request_rerun.assert_not_called()
         mock_active_scriptrunner.request_stop.assert_not_called()
 
         # And a new ScriptRunner should *not* be created.
@@ -313,7 +342,7 @@ class AppSessionTest(unittest.TestCase):
             uploaded_file_mgr=session._uploaded_file_mgr,
             script_cache=session._script_cache,
             initial_rerun_data=RerunData(),
-            user_info={"email": "test@test.com"},
+            user_info={"email": "test@example.com"},
             fragment_storage=session._fragment_storage,
             pages_manager=session._pages_manager,
         )
@@ -426,8 +455,12 @@ class AppSessionTest(unittest.TestCase):
         "get_pages",
         MagicMock(
             return_value={
-                "hash1": {"page_name": "page1", "icon": "", "script_path": "script1"},
-                "hash2": {"page_name": "page2", "icon": "🎉", "script_path": "script2"},
+                "hash1": {"page_name": "page_1", "icon": "", "script_path": "script1"},
+                "hash2": {
+                    "page_name": "page_2",
+                    "icon": "🎉",
+                    "script_path": "script2",
+                },
             }
         ),
     )
@@ -439,8 +472,18 @@ class AppSessionTest(unittest.TestCase):
         expected_msg = ForwardMsg()
         expected_msg.pages_changed.app_pages.extend(
             [
-                AppPage(page_script_hash="hash1", page_name="page1", icon=""),
-                AppPage(page_script_hash="hash2", page_name="page2", icon="🎉"),
+                AppPage(
+                    page_script_hash="hash1",
+                    page_name="page 1",
+                    icon="",
+                    url_pathname="page_1",
+                ),
+                AppPage(
+                    page_script_hash="hash2",
+                    page_name="page 2",
+                    icon="🎉",
+                    url_pathname="page_2",
+                ),
             ]
         )
 
@@ -658,8 +701,12 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
         "get_pages",
         MagicMock(
             return_value={
-                "hash1": {"page_name": "page1", "icon": "", "script_path": "script1"},
-                "hash2": {"page_name": "page2", "icon": "🎉", "script_path": "script2"},
+                "hash1": {"page_name": "page_1", "icon": "", "script_path": "script1"},
+                "hash2": {
+                    "page_name": "page_2",
+                    "icon": "🎉",
+                    "script_path": "script2",
+                },
             }
         ),
     )
@@ -679,7 +726,7 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
             session_state=MagicMock(),
             uploaded_file_mgr=MagicMock(),
             main_script_path="",
-            user_info={"email": "test@test.com"},
+            user_info={"email": "test@example.com"},
             fragment_storage=MemoryFragmentStorage(),
             pages_manager=PagesManager(""),
         )
@@ -722,8 +769,18 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
         assert init_msg.HasField("user_info")
 
         assert list(new_session_msg.app_pages) == [
-            AppPage(page_script_hash="hash1", page_name="page1", icon=""),
-            AppPage(page_script_hash="hash2", page_name="page2", icon="🎉"),
+            AppPage(
+                page_script_hash="hash1",
+                page_name="page 1",
+                icon="",
+                url_pathname="page_1",
+            ),
+            AppPage(
+                page_script_hash="hash2",
+                page_name="page 2",
+                icon="🎉",
+                url_pathname="page_2",
+            ),
         ]
 
         add_script_run_ctx(ctx=orig_ctx)
@@ -748,7 +805,7 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
             session_state=MagicMock(),
             uploaded_file_mgr=MagicMock(),
             main_script_path="",
-            user_info={"email": "test@test.com"},
+            user_info={"email": "test@example.com"},
             fragment_storage=MemoryFragmentStorage(),
             pages_manager=PagesManager(""),
         )
@@ -764,7 +821,6 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
             event=ScriptRunnerEvent.SCRIPT_STARTED,
             page_script_hash="",
             fragment_ids_this_run=["my_fragment_id"],
-            clear_forward_msg_queue=False,
         )
 
         # Yield to let the AppSession's callbacks run.
@@ -772,15 +828,16 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
 
         sent_messages = session._browser_queue._queue
         assert len(sent_messages) == 2  # NewApp and SessionState messages
-        session._clear_queue.assert_not_called()
+        session._clear_queue.assert_called_once()
 
         new_session_msg = sent_messages[0].new_session
         assert new_session_msg.fragment_ids_this_run == ["my_fragment_id"]
 
         add_script_run_ctx(ctx=orig_ctx)
 
-    async def test_clears_forward_msg_queue_by_default(self):
+    async def test_updates_page_script_hash_in_client_state_on_script_start(self):
         session = _create_test_session(asyncio.get_running_loop())
+        session._client_state.page_script_hash = "some_page_script_hash"
 
         mock_scriptrunner = MagicMock(spec=ScriptRunner)
         session._scriptrunner = mock_scriptrunner
@@ -790,14 +847,14 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
         session._on_scriptrunner_event(
             sender=mock_scriptrunner,
             event=ScriptRunnerEvent.SCRIPT_STARTED,
-            page_script_hash="",
-            fragment_ids_this_run=["my_fragment_id"],
+            page_script_hash="some_other_page_script_hash",
+            fragment_ids_this_run=None,
         )
 
         # Yield to let the AppSession's callbacks run.
         await asyncio.sleep(0)
 
-        session._clear_queue.assert_called_once()
+        assert session._client_state.page_script_hash == "some_other_page_script_hash"
 
     async def test_events_handled_on_event_loop(self):
         """ScriptRunner events should be handled on the main thread only."""
@@ -874,9 +931,8 @@ class AppSessionScriptEventTest(IsolatedAsyncioTestCase):
             side_effect=lambda msg: forward_msg_queue_events.append(msg)
         )
         mock_queue.clear = MagicMock(
-            side_effect=lambda retain_lifecycle_msgs: forward_msg_queue_events.append(
-                CLEAR_QUEUE
-            )
+            side_effect=lambda retain_lifecycle_msgs,
+            fragment_ids_this_run: forward_msg_queue_events.append(CLEAR_QUEUE)
         )
 
         session._browser_queue = mock_queue
