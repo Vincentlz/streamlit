@@ -15,6 +15,8 @@
  */
 
 import React, {
+  FC,
+  memo,
   ReactElement,
   useCallback,
   useEffect,
@@ -25,17 +27,15 @@ import React, {
 import { useTheme } from "@emotion/react"
 import Plot, { Figure as PlotlyFigureType } from "react-plotly.js"
 
-import { EmotionTheme } from "@streamlit/lib/src/theme"
-import { PlotlyChart as PlotlyChartProto } from "@streamlit/lib/src/proto"
-import { WidgetStateManager } from "@streamlit/lib/src/WidgetStateManager"
-import {
-  keysToSnakeCase,
-  notNullOrUndefined,
-} from "@streamlit/lib/src/util/utils"
-import { FormClearHelper } from "@streamlit/lib/src/components/widgets/Form/FormClearHelper"
-import { ElementFullscreenContext } from "@streamlit/lib/src/components/shared/ElementFullscreen/ElementFullscreenContext"
-import { useRequiredContext } from "@streamlit/lib/src/hooks/useRequiredContext"
-import { withFullScreenWrapper } from "@streamlit/lib/src/components/shared/FullScreenWrapper"
+import { PlotlyChart as PlotlyChartProto } from "@streamlit/protobuf"
+
+import { EmotionTheme } from "~lib/theme"
+import { WidgetStateManager } from "~lib/WidgetStateManager"
+import { keysToSnakeCase, notNullOrUndefined } from "~lib/util/utils"
+import { FormClearHelper } from "~lib/components/widgets/Form/FormClearHelper"
+import { ElementFullscreenContext } from "~lib/components/shared/ElementFullscreen/ElementFullscreenContext"
+import { useRequiredContext } from "~lib/hooks/useRequiredContext"
+import { withFullScreenWrapper } from "~lib/components/shared/FullScreenWrapper"
 
 import {
   applyStreamlitTheme,
@@ -378,11 +378,12 @@ export function PlotlyChart({
   const theme: EmotionTheme = useTheme()
   const {
     expanded: isFullScreen,
-    width,
+    width: elWidth,
     height,
     expand,
     collapse,
   } = useRequiredContext(ElementFullscreenContext)
+  const width = elWidth || 0
 
   // Load the initial figure spec from the element message
   const initialFigureSpec = useMemo<PlotlyFigureType>(() => {
@@ -593,7 +594,7 @@ export function PlotlyChart({
       : Math.max(
           element.useContainerWidth
             ? width
-            : Math.min(initialFigureSpec.layout.width ?? width, width),
+            : Math.min(initialFigureSpec.layout.width ?? width, width ?? 0),
           // Apply a min width to prevent the chart running into issues with negative
           // width values if the browser window is too small:
           MIN_WIDTH
@@ -791,4 +792,20 @@ export function PlotlyChart({
   )
 }
 
-export default withFullScreenWrapper(PlotlyChart)
+const PlotlyChartWidthCheck: FC<Omit<PlotlyChartProps, "width">> = props => {
+  const { width } = useRequiredContext(ElementFullscreenContext)
+
+  // If the width is not defined yet, we don't want to render the chart because
+  // it can cause issues with Plotly's rendering where elements will be
+  // positioned incorrectly
+  if (!width) {
+    return null
+  }
+
+  return <PlotlyChart width={width} {...props} />
+}
+
+const PlotlyChartWithFullScreenWrapper = withFullScreenWrapper(
+  PlotlyChartWidthCheck
+)
+export default memo(PlotlyChartWithFullScreenWrapper)
