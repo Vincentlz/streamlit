@@ -14,9 +14,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator, Mapping
 from functools import lru_cache
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from streamlit import runtime
 from streamlit.runtime.metrics_util import gather_metrics
@@ -204,3 +205,22 @@ class ContextProxy:
 
         cookies = session_client_request.cookies
         return StreamlitCookies.from_tornado_cookies(cookies)
+
+    @property
+    @gather_metrics("context.timezone")
+    def timezone(self) -> str | None:
+        """The timezone of the user's browser, read-only."""
+        ctx = get_script_run_ctx()
+
+        if ctx is None or ctx.context_info is None:
+            return None
+        return ctx.context_info.timezone
+
+    @property
+    @gather_metrics("context.timezone_offset")
+    def timezone_offset(self) -> int | None:
+        """The timezone offset of the user's browser, read-only."""
+        ctx = get_script_run_ctx()
+        if ctx is None or ctx.context_info is None:
+            return None
+        return ctx.context_info.timezone_offset

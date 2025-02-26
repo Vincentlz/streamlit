@@ -66,7 +66,6 @@ jobs:
       PYTHON_VERSIONS: ${{ steps.build_info.outputs.PYTHON_VERSIONS }}
       PYTHON_MIN_VERSION: ${{ steps.build_info.outputs.PYTHON_MIN_VERSION }}
       PYTHON_MAX_VERSION: ${{ steps.build_info.outputs.PYTHON_MAX_VERSION }}
-      USE_CONSTRAINTS_FILE: ${{ steps.build_info.outputs.USE_CONSTRAINTS_FILE }}
 
   py-unit-tests:
     needs:
@@ -87,7 +86,6 @@ jobs:
             (matrix.python_version == 'max' && needs.build_info.outputs.PYTHON_MAX_VERSION || matrix.python_version)
           )
         }}
-      USE_CONSTRAINTS_FILE: "${{ fromJson(needs.build_info.outputs.USE_CONSTRAINTS_FILE )}}"
       CONSTRAINTS_BRANCH: ${{ inputs.constraints-branch || 'constraints-develop' }}
 
     steps:
@@ -105,7 +103,9 @@ jobs:
       - name: Setup virtual env
         uses: ./.github/actions/make_init
       - name: Run make develop
-        run: make develop
+        run: |
+          source venv/bin/activate
+          make develop
       - name: Run Linters
         run: make pylint
         env:
@@ -216,7 +216,6 @@ jobs:
       )
 
     env:
-      USE_CONSTRAINTS_FILE: "${{ fromJson(needs.build_info.outputs.USE_CONSTRAINTS_FILE )}}"
       CONSTRAINTS_BRANCH: ${{ inputs.constraints-branch || 'constraints-develop' }}
 
     steps:
@@ -238,9 +237,13 @@ jobs:
           # which might cause some unexpected issues with dependencies.
           use_cached_venv: false
       - name: Run make develop
-        run: make develop
+        run: |
+          source venv/bin/activate
+          make develop
       - name: Install integration dependencies
-        run: uv pip install -r lib/integration-requirements.txt --force-reinstall
+        run: |
+          source venv/bin/activate
+          uv pip install -r lib/integration-requirements.txt --force-reinstall
       - name: Run Python integration tests
         run: make pytest-integration
         env:

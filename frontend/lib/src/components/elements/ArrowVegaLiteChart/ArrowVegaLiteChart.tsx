@@ -18,13 +18,13 @@ import React, { FC, useEffect, useRef } from "react"
 
 import { Global } from "@emotion/react"
 
-import { WidgetStateManager } from "@streamlit/lib/src/WidgetStateManager"
+import { WidgetStateManager } from "~lib/WidgetStateManager"
 import Toolbar, {
   StyledToolbarElementContainer,
-} from "@streamlit/lib/src/components/shared/Toolbar"
-import { ElementFullscreenContext } from "@streamlit/lib/src/components/shared/ElementFullscreen/ElementFullscreenContext"
-import { useRequiredContext } from "@streamlit/lib/src/hooks/useRequiredContext"
-import { withFullScreenWrapper } from "@streamlit/lib/src/components/shared/FullScreenWrapper"
+} from "~lib/components/shared/Toolbar"
+import { ElementFullscreenContext } from "~lib/components/shared/ElementFullscreen/ElementFullscreenContext"
+import { useRequiredContext } from "~lib/hooks/useRequiredContext"
+import { withFullScreenWrapper } from "~lib/components/shared/FullScreenWrapper"
 
 import { VegaLiteChartElement } from "./arrowUtils"
 import {
@@ -36,7 +36,6 @@ import { useVegaEmbed } from "./useVegaEmbed"
 
 export interface Props {
   element: VegaLiteChartElement
-  width: number
   widgetMgr: WidgetStateManager
   fragmentId?: string
   disableFullscreenMode?: boolean
@@ -120,4 +119,6 @@ const ArrowVegaLiteChart: FC<Props> = ({
   )
 }
 
-export default withFullScreenWrapper(ArrowVegaLiteChart)
+const ArrowVegaLiteChartWithFullScreen =
+  withFullScreenWrapper(ArrowVegaLiteChart)
+export default ArrowVegaLiteChartWithFullScreen
